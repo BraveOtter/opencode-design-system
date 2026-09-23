@@ -1,0 +1,52 @@
+{
+  "name": "opencode-design-system",
+  "version": "0.1.0",
+  "description": "An OpenCode v2 plugin for creating, evolving, previewing, and using portable AI-readable design systems.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BraveOtter/opencode-design-system.git"
+  },
+  "homepage": "https://github.com/BraveOtter/opencode-design-system#readme",
+  "bugs": {
+    "url": "https://github.com/BraveOtter/opencode-design-system/issues"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "design-system",
+    "design-tokens",
+    "ai"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}
