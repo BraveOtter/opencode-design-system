@@ -38,7 +38,7 @@ npm install
 npm run build
 ```
 
-Este checkout incluye `opencode.jsonc` para cargar `./plugins/local`, un entrypoint local que reexporta `dist/index.js`. Después de compilar, inicia OpenCode desde la raíz del repositorio para probar los comandos. Ese entrypoint de desarrollo no forma parte del paquete publicado.
+Este checkout incluye `plugins/local/index.js` como entrypoint opcional para probar el build local; no se activa por defecto, para evitar cargar una copia local junto al paquete npm global. No forma parte del paquete publicado.
 
 Apunta OpenCode al directorio del paquete:
 
