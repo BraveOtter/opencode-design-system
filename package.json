@@ -1,6 +1,6 @@
 {
   "name": "opencode-design-system",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "An OpenCode v2 plugin for creating, evolving, previewing, and using portable AI-readable design systems.",
   "repository": {
     "type": "git",

@@ -14,7 +14,7 @@ Con OpenCode v2, instala directamente desde el repositorio público:
 opencode plugin add github:BraveOtter/opencode-design-system
 ```
 
-Para fijar la versión inicial cuando esté publicada, usa `opencode plugin add github:BraveOtter/opencode-design-system#v0.1.0`.
+Para fijar la versión `1.0.1` cuando esté publicada, usa `opencode plugin add github:BraveOtter/opencode-design-system#v1.0.1`.
 
 ### Paquete publicado
 
