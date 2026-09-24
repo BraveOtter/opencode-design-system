@@ -84,32 +84,13 @@ Implementación V2 basada en las APIs oficiales actuales:
 - `Plugin.define({ id, setup })` para el entrypoint del paquete.
 - `ctx.command.transform` para commands.
 - `ctx.tool.transform` para herramientas de creación, lectura progresiva, análisis, actualización, preview, comprobación y especificaciones de pantalla.
-- `ctx.skill.transform` para anunciar la Skill de uso del sistema.
-- `ctx.session.hook("context", ...)` para indicar a los agentes que usen la Skill cuando ya exista un manifest, sin inyectar todos los archivos.
-- Markdown estándar bajo `.opencode/agents`, `.opencode/commands` y `.opencode/skills` para hacer que los artefactos sobrevivan a la desinstalación.
+- `ctx.session.hook("context", ...)` para apuntar a la guía de `AGENTS.md` cuando ya exista un manifest, sin copiar recursos del plugin al proyecto ni inyectar todos los archivos.
 
 No se ejecutan migraciones de componentes de la aplicación. El análisis del proyecto está acotado y solo lee archivos candidatos de UI/estilos, configuraciones conocidas y dependencias declaradas.
 
-### Agentes
+### Portabilidad entre agentes
 
-Al crear el sistema se generan agentes V2 estándar:
-
-- `design-system-designer`: diseñador UI/UX, arquitecto, especialista en accesibilidad e interlocutor para decisiones de identidad.
-- `screen-designer`: genera especificaciones de pantalla y mantiene separado el diseño de su implementación.
-
-Los agentes son subagentes Markdown descubiertos por OpenCode, no dependen de un formato privado del plugin. Los commands incluyen las instrucciones de trabajo necesarias desde la primera sesión, antes de que esos archivos existan.
-
-### Skill
-
-La Skill `design-system` dirige a cualquier agente a:
-
-1. Comprobar el manifest.
-2. Leer las reglas y preferencias.
-3. Cargar solo los tokens, componentes y patterns ligados a la tarea.
-4. Respetar decisiones explícitas y documentar cambios reutilizables.
-5. Tratar una especificación de pantalla como un artefacto distinto del código.
-
-No carga permanentemente todas las tablas, componentes y patrones en el contexto. El `manifest.json` sirve como índice para recuperación progresiva.
+Al crear el sistema, el plugin solo escribe `design-system/` y agrega o actualiza el bloque administrado de `AGENTS.md`. Ese bloque enlaza el manifest y explica a cualquier agente —OpenCode u otro— cómo cargar la guía y solo los tokens, componentes y patrones pertinentes. No genera agentes, commands ni skills dentro del proyecto; los commands del plugin existen únicamente mientras el plugin está instalado en OpenCode.
 
 ## Formato generado
 
@@ -140,18 +121,6 @@ design-system/
     └── generate-preview.mjs
 
 AGENTS.md                         # Bloque administrado, conserva el contenido previo
-.opencode/
-├── agents/
-│   ├── design-system-designer.md
-│   └── screen-designer.md
-├── commands/
-│   ├── design-system.md
-│   ├── design-system/update.md
-│   ├── design-system/preview.md
-│   ├── design-system/check.md
-│   └── design-screen.md
-└── skills/
-    └── design-system/SKILL.md
 ```
 
 `manifest.json` incluye versiones, estado, temas, archivos y referencias de tokens por componente/pattern. Los estados son `draft`, `review` y `stable`. El schema base usa `schemaVersion: "1.0.0"`; la versión del sistema comienza en `0.1.0`.
@@ -224,7 +193,7 @@ Este renderer no tiene dependencias externas; lee el manifest, los tokens y docu
 
 `/design-screen` crea únicamente `design-system/screens/<nombre>.md`. La especificación incluye propósito, layout, jerarquía, componentes/tokens, contenido/datos, estados/interacciones, responsive y accesibilidad. Otro agente de programación puede implementar ese brief después.
 
-Cuando un agente de código recibe una solicitud UI ordinaria, `AGENTS.md` y la Skill del proyecto le indican cómo detectar el sistema y cargar solo lo relevante. Este mecanismo también funciona sin el plugin: los tokens y documentación no dependen de React, Vue, Tailwind u OpenCode.
+Cuando un agente de código recibe una solicitud UI ordinaria, `AGENTS.md` le indica cómo descubrir el sistema y cargar solo lo relevante. Este mecanismo también funciona sin el plugin —y con agentes distintos de OpenCode— porque los tokens y la documentación no dependen de React, Vue, Tailwind u OpenCode.
 
 ## Comprobación
 
@@ -239,13 +208,11 @@ npm test
 npm run build
 ```
 
-Los tests ejercitan un flujo integrado en un proyecto temporal: análisis de UI existente, creación y preservación de archivos, instrucción `AGENTS.md`, creación de especificación, propagación de token entre temas, dependencias, preview, checks y protección de rutas.
+Los tests ejercitan un flujo integrado en un proyecto temporal: análisis de UI existente, creación del Design System sin crear recursos `.opencode`, preservación de archivos existentes, actualización del bloque `AGENTS.md`, creación de especificación, propagación de token entre temas, preview, checks y protección de rutas.
 
 ## Documentación oficial de OpenCode v2
 
 - [Plugins](https://opencode.ai/v2/docs/build/plugins)
 - [Commands](https://opencode.ai/v2/docs/commands)
-- [Agents](https://opencode.ai/v2/docs/agents)
-- [Skills](https://opencode.ai/v2/docs/skills)
 - [AGENTS.md / instructions](https://opencode.ai/v2/docs/instructions)
 - [Plugin API reference](https://opencode.ai/v2/docs/api)

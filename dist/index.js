@@ -118,48 +118,9 @@ function projectAgentsBlock(systemName) {
 
 This repository has a framework-neutral Design System at [design-system/manifest.json](design-system/manifest.json). Before creating or changing UI, read [design-system/AI-GUIDELINES.md](design-system/AI-GUIDELINES.md) and discover the relevant tokens, components, and patterns through the manifest. Load only task-relevant documents; the structured Markdown and JSON files are authoritative, and [design-system/preview/index.html](design-system/preview/index.html) is generated visualization only.
 
-Honor explicit decisions in [design-system/preferences.json](design-system/preferences.json) and [design-system/DECISIONS.md](design-system/DECISIONS.md). Do not add arbitrary visual values or redesign existing identity during analysis. A screen brief is a design artifact in [design-system/screens/](design-system/screens/); implementation is a separate step. This guidance is intentionally tool- and framework-independent and applies even when the Design System plugin is unavailable.
+Honor explicit decisions in [design-system/preferences.json](design-system/preferences.json) and [design-system/DECISIONS.md](design-system/DECISIONS.md). Do not add arbitrary visual values or redesign existing identity during analysis. A screen brief is a design artifact in [design-system/screens/](design-system/screens/); implementation is a separate step. This guidance is intentionally tool- and framework-independent: any coding agent can use the Design System without this plugin or project-local copies of plugin agents, commands, or skills.
 ${AGENTS_END}`;
 }
-var PORTABLE_SKILL = `---
-name: Design System
-description: Apply the project's design-system tokens, components, patterns, and accessibility guidance to UI design and implementation.
----
-
-Before any UI task:
-
-1. Check whether design-system/manifest.json exists. If it does not, continue normally without inventing a system.
-2. Read the manifest, AI-GUIDELINES.md, and preferences.json. Use manifest paths to discover relevant documents.
-3. Load only tokens and component/pattern documents needed by this task. For a form, for example, load input/select/button plus the form pattern; do not read every component.
-4. Treat explicit preferences and DECISIONS.md as user-owned constraints. Ask before changing a design identity decision; do not silently override it.
-5. Use documented semantic tokens and components; preserve responsive, state, keyboard, focus, and accessibility requirements.
-6. For design-only requests, write a screen brief to design-system/screens/<screen-name>.md and do not implement application code unless requested.
-7. The preview is generated from structured tokens and specifications. Never use it as the only source of truth.
-
-For larger systems, read only the relevant paths discovered from the manifest and keep unrelated documentation out of context.
-`;
-var DESIGNER_AGENT = `---
-description: Collaborates with users to create and evolve original, accessible UI design systems.
-mode: subagent
----
-
-You are a senior UI/UX designer, accessibility specialist, and design-system architect. Collaborate in natural language. Start by understanding the product, audience, desired mood, references, explicit avoidances, platforms, and relevant accessibility needs. Ask only a few high-value questions when identity choices are unclear; offer concrete alternatives in everyday language. Do not turn the process into a long questionnaire, and do not decide identity questions on the user's behalf.
-
-Explicit preferences have priority. Record them structurally, repeat them into AI-GUIDELINES.md, and preserve them in every update. You may explain contrast or usability tradeoffs, but ask before departing from an explicit request. Build an original visual language rather than copying a known design system.
-
-For an existing application, use the read-only project analysis tool when available; otherwise inspect likely UI/style files without changing them. Preserve its recognizable identity by default. Distinguish probable accidents from intentional variants, explain evidence and uncertainty, and ask the user before normalizing ambiguous inconsistencies. Analysis never authorizes changing application files.
-
-When enough direction is known, summarize the proposed direction and ask for confirmation before committing a substantial initial system. Use Design System tools when available; otherwise create the documented Markdown/JSON files directly and use the included preview generator. Keep the system's status as draft/review until the user accepts it. Explain what changed and any unresolved choices.
-`;
-var SCREEN_AGENT = `---
-description: Produces implementation-ready screen specifications using the project's Design System.
-mode: subagent
----
-
-You are a UI/UX screen designer. Before designing, check design-system/manifest.json and follow AI-GUIDELINES.md. Load only the tokens, components, and patterns relevant to the requested screen. Understand the user's task, hierarchy, content, states, interactions, responsive behavior, and accessibility. Reuse the system; flag a missing reusable component rather than silently inventing a design language.
-
-Design is separate from code implementation. Produce a concise, implementation-ready Markdown specification with purpose, layout, hierarchy, components and token references, data/content, interactions and states, responsive behavior, and accessibility. Save it under design-system/screens/<kebab-case-name>.md using the screen-spec tool when available; otherwise write the Markdown file directly. Do not write React/Vue/etc. unless the user separately requests implementation. If no system exists, state that and create a coherent brief without claiming it follows a nonexistent system.
-`;
 function list(items) {
   return items?.length ? items.map((item) => `- ${item}`).join("\n") : "- None specified.";
 }
@@ -199,17 +160,6 @@ async function atomicWrite(root, relativePath, content) {
     await rename(temporary, destination);
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => void 0);
-    throw error;
-  }
-}
-async function writeIfAbsent(root, relativePath, content) {
-  const destination = resolveInside(root, relativePath);
-  await mkdir(path2.dirname(destination), { recursive: true });
-  try {
-    await writeFile(destination, content, { encoding: "utf8", flag: "wx" });
-    return true;
-  } catch (error) {
-    if (error.code === "EEXIST") return false;
     throw error;
   }
 }
@@ -501,27 +451,8 @@ async function createDesignSystem(root, input) {
     await rm2(staging, { recursive: true, force: true }).catch(() => void 0);
     throw error;
   }
-  const conflicts = [];
   await updateManagedBlock(root, "AGENTS.md", "<!-- opencode-design-system:start -->", "<!-- opencode-design-system:end -->", projectAgentsBlock(manifest.name));
-  const supportFiles = [
-    [".opencode/skills/design-system/SKILL.md", PORTABLE_SKILL],
-    [".opencode/agents/design-system-designer.md", DESIGNER_AGENT],
-    [".opencode/agents/screen-designer.md", SCREEN_AGENT],
-    [".opencode/commands/design-system.md", `Create or continue the project's Design System. Treat the user as a collaborator: ask only relevant design identity questions, preserve explicit preferences, inspect existing UI read-only when appropriate, then create the framework-neutral files in design-system/. Read AGENTS.md and design-system/AI-GUIDELINES.md. If the OpenCode Design System tools are available, use them to validate and regenerate the preview. Do not edit application UI during analysis. User request: $ARGUMENTS
-`],
-    [".opencode/commands/design-system/update.md", `Update the existing Design System in response to: $ARGUMENTS. Read its manifest, preferences, relevant tokens and component/pattern documents first. Explain affected parts and ask only if an identity choice is ambiguous. Keep the user's explicit preferences. Apply semantic updates, record the decision, update the version/changelog, run consistency checks, and regenerate the preview from tokens/specifications. If plugin tools are not available, edit the structured Markdown/JSON deliberately and run node design-system/tools/generate-preview.mjs. Do not use blind search/replace and do not modify application components unless explicitly asked.
-`],
-    [".opencode/commands/design-system/preview.md", `Regenerate design-system/preview/index.html from manifest.json, tokens.json, component documents, and patterns. Treat structured Markdown/JSON as the source of truth. If the Design System plugin is available, use its preview tool; otherwise run node design-system/tools/generate-preview.mjs from the project root.
-`],
-    [".opencode/commands/design-system/check.md", `Check project UI code against design-system/manifest.json and its semantic tokens. Report unknown values, component/state/layout deviations, and likely inconsistencies with file paths. Do not edit application code. If available, use the Design System check tool.
-`],
-    [".opencode/commands/design-screen.md", `Design (do not implement) the requested screen using the Design System. Read AGENTS.md and design-system/AI-GUIDELINES.md, then load only the matching manifest entries, tokens, components, and patterns. Write an implementation-ready brief to design-system/screens/<kebab-case-name>.md with purpose, layout, hierarchy, components/token references, content/data, interactions/states, responsive behavior, and accessibility. If the Design System is absent, say so and write a portable brief without claiming system conformance. Request: $ARGUMENTS
-`]
-  ];
-  for (const [relative, content] of supportFiles) {
-    if (!await writeIfAbsent(root, relative, content)) conflicts.push(relative);
-  }
-  return { success: true, manifest, files: [...files.keys()].map((file) => `${DESIGN_SYSTEM_DIR}/${file}`), conflicts };
+  return { success: true, manifest, files: [...files.keys()].map((file) => `${DESIGN_SYSTEM_DIR}/${file}`) };
 }
 async function regeneratePreview(root) {
   const manifest = await readManifest(root);
@@ -615,7 +546,7 @@ Read the manifest and AI guidelines first. Load only task-relevant component and
 
 ## Plugin-independent maintenance
 
-This project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project [AGENTS.md](../AGENTS.md) and local OpenCode Skill/agents/commands preserve usage guidance when the plugin is not installed.
+This project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system; no project-local plugin agents, commands, or skills are required.
 `;
 }
 function pretty(value) {
@@ -1211,14 +1142,14 @@ var commandPrompts = [
   {
     name: "design-system",
     description: "Create a Design System collaboratively, from scratch or from an existing UI",
-    instruction: `Act as the project's design-system-designer. Collaborate naturally and gather only the identity decisions that are genuinely unclear. Explicit preferences always win. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask them which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with neutral tokens, foundations, explicit preferences, a few useful components and patterns, and any source evidence. Keep status draft until reviewed. Do not modify application files.
+    instruction: `Act as a collaborative design-system designer. Gather only identity decisions that are genuinely unclear; honor explicit preferences. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with neutral tokens, foundations, explicit preferences, a few useful components and patterns, and source evidence. Keep status draft until reviewed. Do not modify application files.
 
 User request:`
   },
   {
     name: "design-system/update",
     description: "Make a coherent, versioned change to the existing Design System",
-    instruction: `Read the Design System first using design_system_read. When the design-system-designer subagent is available, delegate the design decision to it; otherwise adopt its collaborative role. Interpret the user's request semantically, identify impacted token paths and dependent components/patterns, and honor recorded decisions. If the request conflicts with an explicit preference, ask before changing that preference. For a clear requested change, apply it with design_system_update, explain the dependency impact, provide revised full componentUpdates/patternUpdates where documented behavior or guidance needs a semantic change, add tokens only when existing semantic paths do not fit and then provide a value for every theme, add reusable components/patterns when composition is insufficient, update preferences/decisions/foundations where appropriate, choose patch/minor/major impact (expansion requires at least minor), and report any unresolved references. Do not use blind text replacement and do not modify app UI code.
+    instruction: `Work collaboratively as a design-system architect. Read the Design System first using design_system_read. Interpret the request semantically, identify impacted token paths and dependent components/patterns, and honor recorded decisions. If the request conflicts with an explicit preference, ask before changing it. For a clear requested change, apply it with design_system_update, explain the dependency impact, provide revised full componentUpdates/patternUpdates where documented behavior or guidance needs a semantic change, add tokens only when existing semantic paths do not fit and then provide a value for every theme, add reusable components/patterns when composition is insufficient, update preferences/decisions/foundations where appropriate, choose patch/minor/major impact (expansion requires at least minor), and report unresolved references. Do not use blind text replacement and do not modify app UI code.
 
 User request:`
   },
@@ -1239,7 +1170,7 @@ User request:`
   {
     name: "design-screen",
     description: "Design a screen specification using relevant Design System documentation",
-    instruction: `Use the screen-designer subagent when available; otherwise adopt its system prompt. First call design_system_read with the user's task to load only the relevant tokens, components, patterns, preferences, and system guidelines. Design and document hierarchy, content, layout, states, interactions, responsive behavior, and accessibility. Keep design separate from implementation. Call design_system_screen_spec to save an implementation-ready Markdown specification under design-system/screens/. Do not write UI code unless asked separately.
+    instruction: `Act as a UI/UX screen designer. First call design_system_read with the user's task to load only the relevant tokens, components, patterns, preferences, and guidelines. Clarify the screen's purpose and key content when needed, then define hierarchy, layout, data, states, interactions, responsive behavior, and accessibility. Keep design separate from implementation. Call design_system_screen_spec to save an implementation-ready Markdown specification under design-system/screens/. Do not write UI code unless asked separately.
 
 User request:`
   }
@@ -1249,22 +1180,11 @@ var index_default = Plugin.define({
   async setup(ctx) {
     const projectRoot = path5.resolve(ctx.location.project.canonical || ctx.location.directory);
     const designSystemPath = path5.join(projectRoot, DESIGN_SYSTEM_DIR, "manifest.json");
-    const skillPath = path5.join(projectRoot, ".opencode", "skills", "design-system", "SKILL.md");
-    await ctx.skill.transform((editor) => {
-      editor.add({
-        id: "design-system",
-        name: "Design System",
-        description: "Apply this project's semantic design tokens, documented components, patterns, preferences, and accessibility guidance to UI work with progressive loading.",
-        path: skillPath,
-        content: skillBody(),
-        autoinvoke: true
-      });
-    });
     await ctx.session.hook("context", (event) => {
       if (!existsSync(designSystemPath)) return;
       event.system.push({
         type: "text",
-        text: "This project has a portable design-system/manifest.json. For UI tasks, load the design-system skill and read only the relevant token/component/pattern files. Honor AI-GUIDELINES.md, preferences.json, and DECISIONS.md. The HTML preview is generated output, not the source of truth."
+        text: "This project has a framework-neutral Design System at design-system/manifest.json. Follow the Design System guidance in AGENTS.md and design-system/AI-GUIDELINES.md; read only the relevant tokens, components, and patterns, and treat the HTML preview as generated output rather than the source of truth."
       });
     });
     await ctx.command.transform((editor) => {
@@ -1314,7 +1234,6 @@ ${prompt.text.trim()}` : "";
         },
         execute: async (raw) => {
           const result = await createDesignSystem(projectRoot, raw);
-          await ctx.skill.reload();
           return { content: JSON.stringify(result, null, 2) };
         }
       });
@@ -1442,9 +1361,6 @@ var patternSchema = {
 };
 function stringArray() {
   return { type: "array", items: { type: "string" } };
-}
-function skillBody() {
-  return PORTABLE_SKILL.replace(/^---\n[\s\S]*?\n---\n\n/, "");
 }
 async function readRelevantSystem(root, task) {
   try {

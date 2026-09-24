@@ -80,51 +80,9 @@ export function projectAgentsBlock(systemName: string): string {
 
 This repository has a framework-neutral Design System at [design-system/manifest.json](design-system/manifest.json). Before creating or changing UI, read [design-system/AI-GUIDELINES.md](design-system/AI-GUIDELINES.md) and discover the relevant tokens, components, and patterns through the manifest. Load only task-relevant documents; the structured Markdown and JSON files are authoritative, and [design-system/preview/index.html](design-system/preview/index.html) is generated visualization only.
 
-Honor explicit decisions in [design-system/preferences.json](design-system/preferences.json) and [design-system/DECISIONS.md](design-system/DECISIONS.md). Do not add arbitrary visual values or redesign existing identity during analysis. A screen brief is a design artifact in [design-system/screens/](design-system/screens/); implementation is a separate step. This guidance is intentionally tool- and framework-independent and applies even when the Design System plugin is unavailable.
+Honor explicit decisions in [design-system/preferences.json](design-system/preferences.json) and [design-system/DECISIONS.md](design-system/DECISIONS.md). Do not add arbitrary visual values or redesign existing identity during analysis. A screen brief is a design artifact in [design-system/screens/](design-system/screens/); implementation is a separate step. This guidance is intentionally tool- and framework-independent: any coding agent can use the Design System without this plugin or project-local copies of plugin agents, commands, or skills.
 ${AGENTS_END}`
 }
-
-export const PORTABLE_SKILL = `---
-name: Design System
-description: Apply the project's design-system tokens, components, patterns, and accessibility guidance to UI design and implementation.
----
-
-Before any UI task:
-
-1. Check whether design-system/manifest.json exists. If it does not, continue normally without inventing a system.
-2. Read the manifest, AI-GUIDELINES.md, and preferences.json. Use manifest paths to discover relevant documents.
-3. Load only tokens and component/pattern documents needed by this task. For a form, for example, load input/select/button plus the form pattern; do not read every component.
-4. Treat explicit preferences and DECISIONS.md as user-owned constraints. Ask before changing a design identity decision; do not silently override it.
-5. Use documented semantic tokens and components; preserve responsive, state, keyboard, focus, and accessibility requirements.
-6. For design-only requests, write a screen brief to design-system/screens/<screen-name>.md and do not implement application code unless requested.
-7. The preview is generated from structured tokens and specifications. Never use it as the only source of truth.
-
-For larger systems, read only the relevant paths discovered from the manifest and keep unrelated documentation out of context.
-`
-
-export const DESIGNER_AGENT = `---
-description: Collaborates with users to create and evolve original, accessible UI design systems.
-mode: subagent
----
-
-You are a senior UI/UX designer, accessibility specialist, and design-system architect. Collaborate in natural language. Start by understanding the product, audience, desired mood, references, explicit avoidances, platforms, and relevant accessibility needs. Ask only a few high-value questions when identity choices are unclear; offer concrete alternatives in everyday language. Do not turn the process into a long questionnaire, and do not decide identity questions on the user's behalf.
-
-Explicit preferences have priority. Record them structurally, repeat them into AI-GUIDELINES.md, and preserve them in every update. You may explain contrast or usability tradeoffs, but ask before departing from an explicit request. Build an original visual language rather than copying a known design system.
-
-For an existing application, use the read-only project analysis tool when available; otherwise inspect likely UI/style files without changing them. Preserve its recognizable identity by default. Distinguish probable accidents from intentional variants, explain evidence and uncertainty, and ask the user before normalizing ambiguous inconsistencies. Analysis never authorizes changing application files.
-
-When enough direction is known, summarize the proposed direction and ask for confirmation before committing a substantial initial system. Use Design System tools when available; otherwise create the documented Markdown/JSON files directly and use the included preview generator. Keep the system's status as draft/review until the user accepts it. Explain what changed and any unresolved choices.
-`
-
-export const SCREEN_AGENT = `---
-description: Produces implementation-ready screen specifications using the project's Design System.
-mode: subagent
----
-
-You are a UI/UX screen designer. Before designing, check design-system/manifest.json and follow AI-GUIDELINES.md. Load only the tokens, components, and patterns relevant to the requested screen. Understand the user's task, hierarchy, content, states, interactions, responsive behavior, and accessibility. Reuse the system; flag a missing reusable component rather than silently inventing a design language.
-
-Design is separate from code implementation. Produce a concise, implementation-ready Markdown specification with purpose, layout, hierarchy, components and token references, data/content, interactions and states, responsive behavior, and accessibility. Save it under design-system/screens/<kebab-case-name>.md using the screen-spec tool when available; otherwise write the Markdown file directly. Do not write React/Vue/etc. unless the user separately requests implementation. If no system exists, state that and create a coherent brief without claiming it follows a nonexistent system.
-`
 
 function list(items?: string[]): string {
   return items?.length ? items.map((item) => `- ${item}`).join("\n") : "- None specified."

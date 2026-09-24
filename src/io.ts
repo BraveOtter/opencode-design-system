@@ -35,18 +35,6 @@ export async function atomicWrite(root: string, relativePath: string, content: s
   }
 }
 
-export async function writeIfAbsent(root: string, relativePath: string, content: string): Promise<boolean> {
-  const destination = resolveInside(root, relativePath)
-  await mkdir(path.dirname(destination), { recursive: true })
-  try {
-    await writeFile(destination, content, { encoding: "utf8", flag: "wx" })
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
-    throw error
-  }
-}
-
 export async function updateManagedBlock(
   root: string,
   relativePath: string,

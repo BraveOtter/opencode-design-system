@@ -3,8 +3,8 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import type { ComponentDefinition, CreateInput, DesignSystemManifest, PatternDefinition, Preference } from "./types.js"
 import { DESIGN_SYSTEM_DIR, resolveInside, slugify } from "./paths.js"
-import { aiGuidelines, componentMarkdown, DESIGNER_AGENT, PORTABLE_SKILL, projectAgentsBlock, SCREEN_AGENT, patternMarkdown } from "./content.js"
-import { atomicWrite, fileExists, readJson, readText as readFileText, updateManagedBlock, writeIfAbsent } from "./io.js"
+import { aiGuidelines, componentMarkdown, projectAgentsBlock, patternMarkdown } from "./content.js"
+import { atomicWrite, fileExists, readJson, readText as readFileText, updateManagedBlock } from "./io.js"
 import { manifestSchema, tokensSchema, validateTokens } from "./schema.js"
 import { createPreviewHtml } from "./preview.js"
 
@@ -15,7 +15,6 @@ export interface CreateResult {
   success: true
   manifest: DesignSystemManifest
   files: string[]
-  conflicts: string[]
 }
 
 export async function createDesignSystem(root: string, input: CreateInput): Promise<CreateResult> {
@@ -106,22 +105,8 @@ export async function createDesignSystem(root: string, input: CreateInput): Prom
     throw error
   }
 
-  const conflicts: string[] = []
   await updateManagedBlock(root, "AGENTS.md", "<!-- opencode-design-system:start -->", "<!-- opencode-design-system:end -->", projectAgentsBlock(manifest.name))
-  const supportFiles: Array<[string, string]> = [
-    [".opencode/skills/design-system/SKILL.md", PORTABLE_SKILL],
-    [".opencode/agents/design-system-designer.md", DESIGNER_AGENT],
-    [".opencode/agents/screen-designer.md", SCREEN_AGENT],
-    [".opencode/commands/design-system.md", `Create or continue the project's Design System. Treat the user as a collaborator: ask only relevant design identity questions, preserve explicit preferences, inspect existing UI read-only when appropriate, then create the framework-neutral files in design-system/. Read AGENTS.md and design-system/AI-GUIDELINES.md. If the OpenCode Design System tools are available, use them to validate and regenerate the preview. Do not edit application UI during analysis. User request: $ARGUMENTS\n`],
-    [".opencode/commands/design-system/update.md", `Update the existing Design System in response to: $ARGUMENTS. Read its manifest, preferences, relevant tokens and component/pattern documents first. Explain affected parts and ask only if an identity choice is ambiguous. Keep the user's explicit preferences. Apply semantic updates, record the decision, update the version/changelog, run consistency checks, and regenerate the preview from tokens/specifications. If plugin tools are not available, edit the structured Markdown/JSON deliberately and run node design-system/tools/generate-preview.mjs. Do not use blind search/replace and do not modify application components unless explicitly asked.\n`],
-    [".opencode/commands/design-system/preview.md", `Regenerate design-system/preview/index.html from manifest.json, tokens.json, component documents, and patterns. Treat structured Markdown/JSON as the source of truth. If the Design System plugin is available, use its preview tool; otherwise run node design-system/tools/generate-preview.mjs from the project root.\n`],
-    [".opencode/commands/design-system/check.md", `Check project UI code against design-system/manifest.json and its semantic tokens. Report unknown values, component/state/layout deviations, and likely inconsistencies with file paths. Do not edit application code. If available, use the Design System check tool.\n`],
-    [".opencode/commands/design-screen.md", `Design (do not implement) the requested screen using the Design System. Read AGENTS.md and design-system/AI-GUIDELINES.md, then load only the matching manifest entries, tokens, components, and patterns. Write an implementation-ready brief to design-system/screens/<kebab-case-name>.md with purpose, layout, hierarchy, components/token references, content/data, interactions/states, responsive behavior, and accessibility. If the Design System is absent, say so and write a portable brief without claiming system conformance. Request: $ARGUMENTS\n`],
-  ]
-  for (const [relative, content] of supportFiles) {
-    if (!(await writeIfAbsent(root, relative, content))) conflicts.push(relative)
-  }
-  return { success: true, manifest, files: [...files.keys()].map((file) => `${DESIGN_SYSTEM_DIR}/${file}`), conflicts }
+  return { success: true, manifest, files: [...files.keys()].map((file) => `${DESIGN_SYSTEM_DIR}/${file}`) }
 }
 
 export async function regeneratePreview(root: string): Promise<{ preview: string; componentCount: number; patternCount: number }> {
@@ -139,11 +124,6 @@ export async function readManifest(root: string): Promise<DesignSystemManifest> 
 }
 
 export const readText = readFileText
-
-export async function installPortableSupport(root: string, systemName: string): Promise<string[]> {
-  await updateManagedBlock(root, "AGENTS.md", "<!-- opencode-design-system:start -->", "<!-- opencode-design-system:end -->", projectAgentsBlock(systemName))
-  return []
-}
 
 function validateCreateInput(input: CreateInput): void {
   if (!input.name?.trim()) throw new Error("name is required")
@@ -204,7 +184,7 @@ function initialDecisions(preferences: Preference[]): string {
 }
 
 function systemReadme(manifest: DesignSystemManifest): string {
-  return `# ${manifest.name}\n\n${manifest.description}\n\n- **Status:** ${manifest.status}\n- **Design System version:** ${manifest.designSystemVersion}\n- **Schema version:** ${manifest.schemaVersion}\n- **Source:** ${manifest.source.type}\n\n## Source of truth\n\nStart with [manifest.json](manifest.json), which indexes the [semantic tokens](tokens.json), [foundations](FOUNDATIONS.md), [AI guidelines](AI-GUIDELINES.md), [preferences](preferences.json), [decisions](DECISIONS.md), component and pattern documentation, and the generated [interactive preview](preview/index.html).\n\nThe definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview.\n\n## Progressive loading\n\nRead the manifest and AI guidelines first. Load only task-relevant component and pattern files and the token branches they reference. Screen design briefs go in [screens/](screens/).\n\n## Plugin-independent maintenance\n\nThis project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project [AGENTS.md](../AGENTS.md) and local OpenCode Skill/agents/commands preserve usage guidance when the plugin is not installed.\n`
+  return `# ${manifest.name}\n\n${manifest.description}\n\n- **Status:** ${manifest.status}\n- **Design System version:** ${manifest.designSystemVersion}\n- **Schema version:** ${manifest.schemaVersion}\n- **Source:** ${manifest.source.type}\n\n## Source of truth\n\nStart with [manifest.json](manifest.json), which indexes the [semantic tokens](tokens.json), [foundations](FOUNDATIONS.md), [AI guidelines](AI-GUIDELINES.md), [preferences](preferences.json), [decisions](DECISIONS.md), component and pattern documentation, and the generated [interactive preview](preview/index.html).\n\nThe definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview.\n\n## Progressive loading\n\nRead the manifest and AI guidelines first. Load only task-relevant component and pattern files and the token branches they reference. Screen design briefs go in [screens/](screens/).\n\n## Plugin-independent maintenance\n\nThis project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system; no project-local plugin agents, commands, or skills are required.\n`
 }
 
 function pretty(value: unknown): string {

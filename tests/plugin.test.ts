@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -12,21 +13,16 @@ afterEach(async () => {
 })
 
 describe("OpenCode v2 plugin contract", () => {
-  it("registers current V2 commands, tools, skill, and progressive UI context behavior", async () => {
+  it("registers V2 commands and tools, and points UI agents to portable project guidance", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "opencode-design-plugin-"))
     temporaryDirectories.push(root)
     const commands = new Map<string, any>()
     const tools = new Map<string, any>()
-    const skills = new Map<string, any>()
     const hooks = new Map<string, (event: any) => void>()
     const sentPrompts: any[] = []
     let namespace = ""
     const fakeContext = {
       location: { directory: root, project: { canonical: root } },
-      skill: {
-        transform: async (register: (editor: any) => void) => register({ add: (definition: any) => skills.set(definition.id, definition) }),
-        reload: async () => undefined,
-      },
       session: {
         hook: async (name: string, callback: (event: any) => void) => hooks.set(name, callback),
         prompt: async (input: any) => sentPrompts.push(input),
@@ -50,8 +46,6 @@ describe("OpenCode v2 plugin contract", () => {
       "design_system_create", "design_system_read", "design_system_analyze", "design_system_update",
       "design_system_preview", "design_system_check", "design_system_screen_spec",
     ]))
-    expect(skills.get("design-system").autoinvoke).toBe(true)
-    expect(skills.get("design-system").path).toContain(".opencode")
     expect(hooks.has("context")).toBe(true)
 
     await commands.get("design-system/update").execute({
@@ -81,12 +75,14 @@ describe("OpenCode v2 plugin contract", () => {
       ],
       patterns: [],
     })
+    expect(existsSync(path.join(root, ".opencode"))).toBe(false)
     const readResult = JSON.parse((await tools.get("design_system_read").execute({ task: "Button action" })).content)
     expect(readResult.components.map((item: { name: string }) => item.name)).toContain("Button")
     expect(readResult.excluded).toContain("Input")
     expect(readResult.tokens.themes.dark.color.accent.primary).toBe("#78b99b")
     contextHook(systemEvent)
     expect(systemEvent.system).toHaveLength(1)
-    expect(systemEvent.system[0]!.text).toContain("read only the relevant")
+    expect(systemEvent.system[0]!.text).toContain("Follow the Design System guidance in AGENTS.md")
+    expect(systemEvent.system[0]!.text).toContain("read only the relevant tokens")
   })
 })

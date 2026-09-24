@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { existsSync } from "node:fs"
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import os from "node:os"
@@ -33,15 +34,16 @@ describe("Design System end-to-end flow", () => {
     expect(created.manifest.status).toBe("draft")
     expect(created.manifest.source.type).toBe("existing-project")
     expect(created.manifest.components.map((item) => item.name)).toContain("Button")
-    expect(created.conflicts).toContain(".opencode/agents/design-system-designer.md")
     expect(await readFile(path.join(root, ".opencode", "agents", "design-system-designer.md"), "utf8")).toBe("user-owned agent\n")
+    expect(await readdir(path.join(root, ".opencode", "agents"))).toEqual(["design-system-designer.md"])
+    expect(existsSync(path.join(root, ".opencode", "commands"))).toBe(false)
+    expect(existsSync(path.join(root, ".opencode", "skills"))).toBe(false)
 
     const agents = await readFile(path.join(root, "AGENTS.md"), "utf8")
     expect(agents).toContain("Existing instructions")
     expect(agents).toContain("<!-- opencode-design-system:start -->")
-    expect(agents).toContain("even when the Design System plugin is unavailable")
-    expect(await readFile(path.join(root, ".opencode", "skills", "design-system", "SKILL.md"), "utf8")).toContain("Load only tokens")
-    expect(await readFile(path.join(root, ".opencode", "commands", "design-system", "update.md"), "utf8")).toContain("blind search/replace")
+    expect(agents).toContain("any coding agent can use the Design System without this plugin")
+    expect(agents).toContain("design-system/manifest.json")
 
     const brief = await saveScreenSpec(root, "User Management", "Purpose: administer team access.\n\nLayout: sidebar, page header, filters, and a responsive users table.\n\nInteractions: invite, edit role, confirm destructive actions.")
     expect(brief.file).toBe("design-system/screens/user-management.md")
