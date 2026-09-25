@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 import type { ComponentDefinition, CreateInput, DesignSystemManifest, PatternDefinition, Preference } from "./types.js"
@@ -20,17 +20,25 @@ export interface CreateResult {
 export async function createDesignSystem(root: string, input: CreateInput): Promise<CreateResult> {
   validateCreateInput(input)
   const target = resolveInside(root, DESIGN_SYSTEM_DIR)
-  let existingEntries: string[] = []
+  let existingDirectories: string[] = []
+  let targetExists = false
   try {
-    existingEntries = await readdir(target)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
-  }
-  if (existingEntries.length > 0) {
-    if (await fileExists(root, `${DESIGN_SYSTEM_DIR}/manifest.json`)) {
-      throw new Error("A Design System already exists. Use design_system_read, then /design-system:update.")
+    targetExists = true
+    const inspection = await inspectExistingDirectoryTree(target)
+    if (inspection.userOwnedPaths.length > 0) {
+      if (await fileExists(root, `${DESIGN_SYSTEM_DIR}/manifest.json`)) {
+        throw new Error("A Design System already exists. Use design_system_read, then /design-system:update.")
+      }
+      const paths = inspection.userOwnedPaths.map((item) => path.relative(root, item).split(path.sep).join("/"))
+      throw new Error(`design-system/ contains existing user-owned files or links: ${paths.join(", ")}. Review them before creating a system there.`)
     }
-    throw new Error("design-system/ already contains user files. Move or review them before creating a system there.")
+    existingDirectories = inspection.directories
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      targetExists = false
+    } else {
+      throw error
+    }
   }
 
   const preferences = input.preferences ?? []
@@ -85,10 +93,20 @@ export async function createDesignSystem(root: string, input: CreateInput): Prom
     ["schema/tokens.schema.json", pretty(tokensSchema)],
     ["README.md", systemReadme(manifest)],
     ["tools/generate-preview.mjs", await readFile(new URL("../templates/generate-preview.mjs", import.meta.url), "utf8")],
+    ["tools/preview-renderer.mjs", await readFile(new URL("../templates/preview-renderer.mjs", import.meta.url), "utf8")],
     ["preview/index.html", createPreviewHtml({ manifest, tokens, components, patterns })],
   ])
   for (const [index, component] of components.entries()) files.set(manifest.components[index]!.file, componentMarkdown(component))
   for (const [index, pattern] of patterns.entries()) files.set(manifest.patterns[index]!.file, patternMarkdown(pattern))
+
+  const generatedFilePaths = new Set(files.keys())
+  const directoryConflicts = existingDirectories
+    .map((directory) => ({ directory, relative: path.relative(target, directory).split(path.sep).join("/") }))
+    .filter(({ relative }) => generatedFilePaths.has(relative))
+  if (directoryConflicts.length > 0) {
+    const paths = directoryConflicts.map(({ relative }) => `${DESIGN_SYSTEM_DIR}/${relative}`)
+    throw new Error(`design-system/ has empty directories where generated files would be written: ${paths.join(", ")}. Review them before creating a system there.`)
+  }
 
   await mkdir(path.dirname(target), { recursive: true })
   const staging = path.join(path.dirname(target), `.design-system-${randomUUID()}`)
@@ -98,10 +116,20 @@ export async function createDesignSystem(root: string, input: CreateInput): Prom
       await mkdir(path.dirname(destination), { recursive: true })
       await writeFile(destination, content, "utf8")
     }
-    if (existingEntries.length === 0) await rm(target, { recursive: true, force: true })
+    if (targetExists) {
+      for (const directory of [...existingDirectories].sort((left, right) => right.length - left.length)) {
+        await rmdir(directory)
+      }
+    }
     await rename(staging, target)
+    if (targetExists) await restoreEmptyDirectories(existingDirectories)
   } catch (error) {
     await rm(staging, { recursive: true, force: true }).catch(() => undefined)
+    if (existingDirectories.length > 0) await restoreEmptyDirectories(existingDirectories)
+    const code = (error as NodeJS.ErrnoException).code
+    if (targetExists && (code === "ENOTEMPTY" || code === "EEXIST" || code === "EPERM")) {
+      throw new Error("design-system/ changed during creation or contains user-owned content. Existing files were preserved; review the folder and retry.")
+    }
     throw error
   }
 
@@ -124,6 +152,34 @@ export async function readManifest(root: string): Promise<DesignSystemManifest> 
 }
 
 export const readText = readFileText
+
+async function inspectExistingDirectoryTree(target: string): Promise<{ directories: string[]; userOwnedPaths: string[] }> {
+  const directories: string[] = []
+  const userOwnedPaths: string[] = []
+
+  async function visit(directory: string): Promise<void> {
+    const info = await lstat(directory)
+    if (info.isSymbolicLink() || !info.isDirectory()) {
+      userOwnedPaths.push(directory)
+      return
+    }
+    directories.push(directory)
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const child = path.join(directory, entry.name)
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await visit(child)
+      else userOwnedPaths.push(child)
+    }
+  }
+
+  await visit(target)
+  return { directories, userOwnedPaths }
+}
+
+async function restoreEmptyDirectories(directories: string[]): Promise<void> {
+  for (const directory of [...directories].sort((left, right) => left.length - right.length)) {
+    await mkdir(directory, { recursive: true }).catch(() => undefined)
+  }
+}
 
 function validateCreateInput(input: CreateInput): void {
   if (!input.name?.trim()) throw new Error("name is required")
@@ -222,7 +278,7 @@ function parsePattern(name: string, markdown: string, tokens: string[]): Pattern
 }
 
 function section(markdown: string, heading: string): string {
-  const match = markdown.match(new RegExp(`^## ${heading}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, "mi"))
+  const match = markdown.match(new RegExp(`^## ${heading}[ \\t]*\\r?\\n([\\s\\S]*?)(?=\\r?\\n## |(?![\\s\\S]))`, "mi"))
   return match?.[1]?.replace(/^- None specified\.$/m, "").trim() ?? ""
 }
 

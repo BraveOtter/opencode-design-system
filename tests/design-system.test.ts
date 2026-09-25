@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs"
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { execFile } from "node:child_process"
+import { Script } from "node:vm"
 import { promisify } from "node:util"
 import os from "node:os"
 import path from "node:path"
@@ -115,9 +116,11 @@ It does not need a distinct surface.
     const guidelines = await readFile(path.join(root, "design-system", "AI-GUIDELINES.md"), "utf8")
     expect(guidelines).toContain("nearly-square")
     expect(guidelines).toContain("no-gradients")
+    const generatedPreview = await readFile(path.join(root, "design-system", "preview", "index.html"), "utf8")
     const portableRun = await execFileAsync(process.execPath, [path.join(root, "design-system", "tools", "generate-preview.mjs")], { cwd: root })
     expect(portableRun.stdout).toContain("Generated design-system/preview/index.html")
     const preview = await readFile(path.join(root, "design-system", "preview", "index.html"), "utf8")
+    expect(preview).toBe(generatedPreview)
     expect(preview).toContain("Toggle theme")
     expect(preview).toContain("role=\"dialog\"")
     expect(preview).toContain("setTheme")
@@ -130,13 +133,86 @@ It does not need a distinct surface.
     expect(check.warnings.some((warning) => warning.includes("border-radius 7px"))).toBe(true)
   })
 
-  it("refuses to overwrite an existing design-system directory or escape the project root", async () => {
+  it("preserves empty scaffold directories, refuses user files, and prevents escaping the project root", async () => {
     const root = await projectFixture()
     await mkdir(path.join(root, "design-system"), { recursive: true })
-    await writeFile(path.join(root, "design-system", "notes.md"), "keep this\n")
-    await expect(createDesignSystem(root, fixtureInput())).rejects.toThrow(/contains user files/)
-    expect(await readFile(path.join(root, "design-system", "notes.md"), "utf8")).toBe("keep this\n")
-    expect(() => resolveInside(root, "../secret.txt")).toThrow(/escapes/)
+    await mkdir(path.join(root, "design-system", "components"), { recursive: true })
+    await mkdir(path.join(root, "design-system", "patterns"), { recursive: true })
+    await mkdir(path.join(root, "design-system", "preview"), { recursive: true })
+    await mkdir(path.join(root, "design-system", "scratch", "kept-empty"), { recursive: true })
+    const created = await createDesignSystem(root, fixtureInput())
+    expect(created.success).toBe(true)
+    expect(await readdir(path.join(root, "design-system", "components"))).toContain("button.md")
+    expect(existsSync(path.join(root, "design-system", "scratch", "kept-empty"))).toBe(true)
+
+    const conflictRoot = await projectFixture()
+    await mkdir(path.join(conflictRoot, "design-system", "manifest.json", "empty"), { recursive: true })
+    await expect(createDesignSystem(conflictRoot, fixtureInput())).rejects.toThrow(/empty directories where generated files would be written/)
+    expect(existsSync(path.join(conflictRoot, "design-system", "manifest.json", "empty"))).toBe(true)
+
+    const otherRoot = await projectFixture()
+    await mkdir(path.join(otherRoot, "design-system"), { recursive: true })
+    await writeFile(path.join(otherRoot, "design-system", "notes.md"), "keep this\n")
+    await expect(createDesignSystem(otherRoot, fixtureInput())).rejects.toThrow(/contains existing user-owned files or links/)
+    expect(await readFile(path.join(otherRoot, "design-system", "notes.md"), "utf8")).toBe("keep this\n")
+    expect(() => resolveInside(otherRoot, "../secret.txt")).toThrow(/escapes/)
+  })
+
+  it("maps Vaeloo semantic tokens and renders working magnetic and 3D component examples in both generators", async () => {
+    const root = await projectFixture()
+    const input = fixtureInput()
+    input.name = "Vaeloo — Caoba y Precisión"
+    input.tokens = {
+      schemaVersion: "1.0.0",
+      themes: {
+        light: {
+          color: {
+            canvas: "#f5f0e8", surface: "#fffdf9", text: "#29231f", muted: "#71655c",
+            brand: "#75402e", brandHover: "#633524", onBrand: "#ffffff", brandSubtle: "#ead9cf",
+            border: "#d8c9bf", focus: "#995d43", success: "#477454", warning: "#9b6d2e", danger: "#a4453f",
+          },
+          typography: { body: "Geist Sans, sans-serif", logo: "Audiowide, sans-serif" },
+          radius: { control: "0.625rem", card: "1.5rem", pill: "9999px" },
+          depth: { buttonPerspective: "600px", buttonTiltMax: "10deg", buttonTranslation: "0.2", cardPerspective: "1200px", cardTiltMax: "18deg", cardLift: "16px" },
+        },
+        dark: {
+          color: {
+            canvas: "#282421", surface: "#35302b", text: "#f5f0e8", muted: "#c8bbb1",
+            brand: "#d4a58e", brandHover: "#e2bba6", onBrand: "#282421", brandSubtle: "#5a3b30",
+            border: "#61564e", focus: "#e0ad91", success: "#9ac49f", warning: "#dfbc75", danger: "#e4a09a",
+          },
+          typography: { body: "Geist Sans, sans-serif" },
+          radius: { control: "0.625rem", card: "1.5rem", pill: "9999px" },
+          depth: { buttonPerspective: "600px", buttonTiltMax: "10deg", buttonTranslation: "0.2", cardPerspective: "1200px", cardTiltMax: "18deg", cardLift: "16px" },
+        },
+      },
+    }
+    input.components = [
+      { name: "Action Button", purpose: "A focused primary action with a magnetic response.", variants: ["brand", "magnetic"], tokens: ["color.brand", "depth.buttonPerspective", "depth.buttonTiltMax", "depth.buttonTranslation"], behavior: "Magnetism is limited to the primary action." },
+      { name: "Profile Identity Card", purpose: "A three-dimensional identity card.", tokens: ["color.surface", "depth.cardPerspective", "depth.cardTiltMax", "depth.cardLift"] },
+    ]
+    input.patterns = []
+
+    await createDesignSystem(root, input)
+    const previewPath = path.join(root, "design-system", "preview", "index.html")
+    const initialPreview = await readFile(previewPath, "utf8")
+    expect(initialPreview).toContain('"brand":"#75402e"')
+    expect(initialPreview).toContain('"brandHover":"#633524"')
+    expect(initialPreview).toContain("key.replace(/[A-Z]/g,letter=>'-'+letter.toLowerCase())")
+    expect(initialPreview).toContain('"brand":"#d4a58e"')
+    expect(initialPreview).toContain('class="button magnetic"')
+    expect(initialPreview).toContain("data-tilt-card")
+    expect(initialPreview).toContain("data-preview-action")
+    expect(initialPreview).not.toContain("#276f55")
+    expect(initialPreview).toContain("--preview-brand")
+
+    const portableRun = await execFileAsync(process.execPath, [path.join(root, "design-system", "tools", "generate-preview.mjs")], { cwd: root })
+    expect(portableRun.stdout).toContain("Generated design-system/preview/index.html")
+    const regeneratedPreview = await readFile(previewPath, "utf8")
+    expect(regeneratedPreview).toBe(initialPreview)
+    const script = initialPreview.match(/<script>([\s\S]*?)<\/script>/)?.[1]
+    expect(script).toBeTruthy()
+    expect(() => new Script(script!)).not.toThrow()
   })
 
   it("uses semantic tokens safely in preview markup and rejects updates to unknown paths", async () => {
