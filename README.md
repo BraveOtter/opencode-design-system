@@ -218,6 +218,17 @@ npm run build
 
 Tests cover an integrated temporary-project workflow, including read-only analysis, creation and preservation of user files, managed `AGENTS.md` updates, screen briefs, multi-theme token updates, previews, checks, and path safety.
 
+## Publish a release
+
+The `Publish to npm` GitHub Actions workflow publishes when a `vX.Y.Z` tag is pushed, after checks pass and the tag matches the version in `package.json`. Before the first release, configure npm Trusted Publishing for the `BraveOtter/opencode-design-system` repository and the `publish.yml` workflow, and allow the direct `npm publish` action. The workflow uses OIDC, so no npm publish token needs to be stored in GitHub; npm also generates provenance automatically for this public repository.
+
+To bump the package version and push its commit and tag:
+
+```sh
+npm version patch # or minor / major
+git push --follow-tags
+```
+
 ## Documentation
 
 - [OpenCode v2 plugin guide](https://opencode.ai/v2/docs/build/plugins)

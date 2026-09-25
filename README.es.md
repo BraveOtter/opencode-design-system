@@ -218,6 +218,17 @@ npm run build
 
 Las pruebas cubren un flujo integrado en un proyecto temporal: análisis de solo lectura, creación y conservación de archivos del usuario, actualización del bloque administrado de `AGENTS.md`, especificaciones de pantallas, cambios de tokens entre temas, vistas previas, comprobaciones y seguridad de rutas.
 
+## Publicar una versión
+
+El workflow de GitHub Actions `Publish to npm` publica al subir un tag `vX.Y.Z`, una vez superadas las comprobaciones y verificado que el tag coincide con la versión de `package.json`. Antes de la primera publicación, configura Trusted Publishing en npm para el repositorio `BraveOtter/opencode-design-system` y el workflow `publish.yml`, y permite la acción directa `npm publish`. El workflow usa OIDC, así que no hace falta guardar un token de publicación de npm en GitHub; además, npm genera automáticamente la atestación de procedencia para este repositorio público.
+
+Para actualizar la versión del paquete y subir su commit y tag:
+
+```sh
+npm version patch # o minor / major
+git push --follow-tags
+```
+
 ## Documentación
 
 - [Guía de plugins de OpenCode v2](https://opencode.ai/v2/docs/build/plugins)
