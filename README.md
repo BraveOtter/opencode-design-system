@@ -34,10 +34,10 @@ Install it globally with the OpenCode CLI:
 opencode plugin add opencode-design-system
 ```
 
-To pin the current release:
+To pin a specific npm release, replace `<version>` with the version you want:
 
 ```sh
-opencode plugin add opencode-design-system@1.0.1
+opencode plugin add opencode-design-system@<version>
 ```
 
 Or configure it for a project in `opencode.json` or `opencode.jsonc`:
@@ -59,10 +59,10 @@ For the repository's latest default-branch version:
 opencode plugin add github:BraveOtter/opencode-design-system
 ```
 
-To pin a tagged release instead:
+To pin a tagged GitHub release, replace `<tag>` with the tag you want:
 
 ```sh
-opencode plugin add github:BraveOtter/opencode-design-system#v1.0.1
+opencode plugin add github:BraveOtter/opencode-design-system#<tag>
 ```
 
 ### Use a local checkout

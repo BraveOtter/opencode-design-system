@@ -34,10 +34,10 @@ Instale globalmente pela CLI do OpenCode:
 opencode plugin add opencode-design-system
 ```
 
-Para fixar a versão atual:
+Para fixar uma versão específica do npm, substitua `<version>` pela versão desejada:
 
 ```sh
-opencode plugin add opencode-design-system@1.0.1
+opencode plugin add opencode-design-system@<version>
 ```
 
 Ou configure o plugin para um projeto em `opencode.json` ou `opencode.jsonc`:
@@ -59,10 +59,10 @@ Para instalar a versão mais recente da branch padrão:
 opencode plugin add github:BraveOtter/opencode-design-system
 ```
 
-Para fixar uma versão marcada:
+Para fixar uma versão marcada do GitHub, substitua `<tag>` pela tag desejada:
 
 ```sh
-opencode plugin add github:BraveOtter/opencode-design-system#v1.0.1
+opencode plugin add github:BraveOtter/opencode-design-system#<tag>
 ```
 
 ### Use um checkout local
