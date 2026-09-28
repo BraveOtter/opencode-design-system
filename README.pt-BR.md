@@ -6,7 +6,9 @@
 
 **Um plugin colaborativo do OpenCode v2 para criar e evoluir sistemas de design portáveis, independentes de framework e que agentes de IA conseguem seguir de verdade.**
 
-[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md)
+[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/main/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/main/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/main/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/main/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/main/README.ja.md)
+
+> **Aviso:** Este é um projeto independente da comunidade. Ele não é desenvolvido pela equipe do OpenCode nem tem qualquer afiliação com o OpenCode.
 
 O sistema de design se torna a memória visual duradoura do projeto: **Markdown e JSON** estruturados para tokens semânticos, preferências explícitas, decisões de design, componentes, padrões e especificações de telas. Uma prévia HTML interativa é gerada a partir dessas fontes; ela nunca é uma segunda fonte de verdade.
 
@@ -114,6 +116,7 @@ Também é possível pedir uma especificação de tela em linguagem natural, sem
 | `/design-system [ideia]` | Criar um sistema em colaboração ou conversar sobre como documentar uma UI existente. |
 | `/design-system/update [alteração]` | Aplicar uma mudança semântica versionada e identificar a documentação dependente. |
 | `/design-system/preview` | Gerar novamente a prévia interativa a partir dos arquivos estruturados. |
+| `/design-system/review` | Abrir uma prévia local em dois painéis com a conversa atual e seleção contextual de elementos. |
 | `/design-system/check` | Fazer uma verificação heurística e somente leitura de possíveis divergências entre os estilos de UI e os tokens documentados. |
 | `/design-screen [tela]` | Salvar uma especificação de tela pronta para implementação, sem escrever código de UI do app. |
 
@@ -195,9 +198,57 @@ O impacto na versão do sistema de design segue estas regras:
 
 Essas versões pertencem ao sistema de design gerado no projeto, não ao pacote npm do plugin. Por padrão, sistemas atualizados voltam para `draft` para que uma pessoa possa revisá-los.
 
+## Skills de design integradas
+
+O plugin registra internamente três skills de design adaptadas por meio do OpenCode v2. Elas trabalham em conjunto ao criar ou atualizar um sistema, escolher tokens ou especificar telas: direção visual, design de interfaces de produto e decisões de tokens com acessibilidade. Elas orientam o agente, mas não substituem a fonte de verdade independente de framework em Markdown e JSON, e **seus arquivos SKILL.md não são gravados nos projetos dos usuários**.
+
+### Personalizar as skills
+
+Use a opção `designSkills` do plugin para desativar todas as skills integradas, desativar algumas ou permitir somente IDs selecionados. Em um objeto, as entradas não especificadas continuam ativadas:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-design-system",
+      "options": {
+        "designSkills": {
+          "opencode-design-visual-direction": false
+        }
+      }
+    }
+  ]
+}
+```
+
+Defina `"designSkills": false` para desativar as três ou forneça uma lista de IDs para ativar somente essas skills. Para adicionar uma skill pessoal sem alterar o plugin, crie um `SKILL.md` descritivo em `~/.config/opencode/skills/<id-da-sua-skill>/`; o OpenCode a descobrirá globalmente. Desative uma skill integrada antes se a sua for substituí-la. Para alterar uma skill integrada, edite `skills/<diretorio-da-skill>/SKILL.md` em um checkout local ou fork do plugin e carregue esse checkout; mantenha os créditos e a licença da fonte. Os avisos completos estão em [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
+### Créditos
+
+- **Frontend Design** — Anthropic; autores originais Prithvi Rajasekaran e Alexander Bricken. [Fonte](https://github.com/anthropics/claude-code/tree/main/plugins/frontend-design/skills/frontend-design) · Apache-2.0.
+- **Interface Design** — Dammyjay93 (Damola Akinleye). [Fonte](https://github.com/Dammyjay93/interface-design) · MIT.
+- **Design System Auditor** — Community-Access; copyright © Taylor Arndt. [Fonte](https://github.com/Community-Access/accessibility-agents/blob/main/skills/design-system-auditor/SKILL.md) · MIT.
+
 ## Prévia interativa
 
 `design-system/preview/index.html` é gerado a partir do manifest, dos tokens e das especificações de componentes e padrões. Ele inclui amostras de tokens, exemplos de componentes, troca de tema quando há mais de um e exemplos interativos. Há foco visível para teclado e suporte a `prefers-reduced-motion`.
+
+Use `/design-system/review` para abrir um espaço local com a prévia interativa à esquerda e a mesma sessão do OpenCode à direita. Mensagens enviadas pelo painel da direita chegam a essa sessão; ao final de cada turno, a prévia gerada é atualizada. Ative **Selecionar elemento** para escolher componentes, padrões ou amostras de tokens semânticos e anexar até oito referências verificadas a uma mensagem. As referências usam nomes do manifest, caminhos de arquivos e caminhos semânticos — não seletores do DOM — e são verificadas novamente antes do envio para evitar agir silenciosamente sobre uma seleção desatualizada. O HTML independente continua disponível e funciona sem esse espaço. O servidor de revisão escuta somente em `127.0.0.1`, usa uma porta aleatória, é encerrado quando o plugin é descarregado e não expõe credenciais do OpenCode ao navegador. Por padrão, o comando publica um link na conversa em vez de abrir o navegador automaticamente.
+
+Para abrir automaticamente o navegador padrão ao executar o comando, configure esta opção do plugin:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-design-system",
+      "options": { "autoOpenReview": true }
+    }
+  ]
+}
+```
 
 Gere novamente no OpenCode com `/design-system/preview` ou, sem o plugin, a partir da raiz do projeto:
 
@@ -216,7 +267,7 @@ npm test
 npm run build
 ```
 
-Os testes cobrem um fluxo integrado em um projeto temporário, incluindo análise somente leitura, criação e preservação de arquivos do usuário, atualização do bloco gerenciado do `AGENTS.md`, especificações de tela, atualizações de tokens entre temas, prévias, verificações e segurança de caminhos.
+Os testes cobrem um fluxo integrado em um projeto temporário, incluindo análise somente leitura, criação e preservação de arquivos do usuário, atualização do bloco gerenciado do `AGENTS.md`, especificações de tela, atualizações de tokens entre temas, prévias, o espaço local autenticado e a validação de referências de elementos, verificações e segurança de caminhos.
 
 ## Publicar uma versão
 

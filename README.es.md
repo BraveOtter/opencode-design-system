@@ -6,7 +6,9 @@
 
 **Un plugin colaborativo de OpenCode v2 para crear y evolucionar sistemas de diseño portables y neutrales respecto al framework, que los agentes de IA puedan seguir de verdad.**
 
-[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md)
+[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/main/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/main/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/main/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/main/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/main/README.ja.md)
+
+> **Aviso:** Este es un proyecto independiente de la comunidad. No está desarrollado por el equipo de OpenCode ni está afiliado con OpenCode de ninguna manera.
 
 El sistema de diseño se convierte en la memoria visual duradera del proyecto: **Markdown y JSON** estructurados para tokens semánticos, preferencias explícitas, decisiones de diseño, componentes, patrones y especificaciones de pantallas. Se genera una vista HTML interactiva a partir de esas fuentes; nunca es una segunda fuente de verdad.
 
@@ -114,6 +116,7 @@ También puedes pedir una especificación de pantalla en lenguaje natural sin us
 | `/design-system [idea]` | Crear un sistema en colaboración o conversar sobre cómo documentar una interfaz existente. |
 | `/design-system/update [cambio]` | Aplicar un cambio semántico versionado e identificar la documentación dependiente. |
 | `/design-system/preview` | Regenerar la vista interactiva a partir de los archivos estructurados. |
+| `/design-system/review` | Abrir una vista local en dos paneles con la preview, la conversación actual y selección contextual de elementos. |
 | `/design-system/check` | Comprobación heurística de solo lectura para detectar posibles diferencias entre estilos y tokens documentados. |
 | `/design-screen [pantalla]` | Guardar una especificación lista para implementar, sin escribir código de UI de la aplicación. |
 
@@ -195,9 +198,59 @@ El impacto en la versión del sistema de diseño sigue estas reglas:
 
 Estas versiones corresponden al sistema de diseño generado en el proyecto, no al paquete npm del plugin. De forma predeterminada, los sistemas actualizados vuelven a `draft` para que una persona pueda revisarlos.
 
+## Skills de diseño integradas
+
+El plugin registra internamente tres skills de diseño adaptadas mediante OpenCode v2. Se usan en conjunto al crear o actualizar un sistema, elegir tokens o especificar pantallas: dirección visual, diseño de interfaces de producto y decisiones de tokens con accesibilidad. Orientan al agente, pero no sustituyen la fuente de verdad neutral al framework en Markdown y JSON, y **sus archivos SKILL.md no se escriben en los proyectos de usuario**.
+
+### Personalizar las skills
+
+Usa la opción `designSkills` del plugin para desactivar todas las skills integradas, desactivar alguna o permitir solo determinados IDs. Si usas un objeto, las entradas no especificadas siguen activas:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-design-system",
+      "options": {
+        "designSkills": {
+          "opencode-design-visual-direction": false
+        }
+      }
+    }
+  ]
+}
+```
+
+Usa `"designSkills": false` para desactivar las tres, o pasa una lista de IDs para activar solo esas skills. Para añadir una skill personal sin modificar el plugin, crea un `SKILL.md` con una descripción clara en `~/.config/opencode/skills/<id-de-tu-skill>/`; OpenCode la descubre globalmente. Si quieres sustituir una integrada, desactívala primero. Para modificar una skill integrada, edita `skills/<directorio-de-la-skill>/SKILL.md` en un checkout local o fork del plugin y carga ese checkout; conserva el crédito de origen y su licencia. Los avisos completos están en [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+
+### Créditos
+
+- **Frontend Design** — Anthropic; autores originales Prithvi Rajasekaran y Alexander Bricken. [Fuente](https://github.com/anthropics/claude-code/tree/main/plugins/frontend-design/skills/frontend-design) · Apache-2.0.
+- **Interface Design** — Dammyjay93 (Damola Akinleye). [Fuente](https://github.com/Dammyjay93/interface-design) · MIT.
+- **Design System Auditor** — Community-Access; copyright © Taylor Arndt. [Fuente](https://github.com/Community-Access/accessibility-agents/blob/main/skills/design-system-auditor/SKILL.md) · MIT.
+
 ## Vista interactiva
 
-`design-system/preview/index.html` se genera a partir del manifest, los tokens y las especificaciones de componentes y patrones. Incluye muestras de tokens, ejemplos de componentes, cambio de tema cuando hay varios y ejemplos interactivos. Respeta el foco visible por teclado y `prefers-reduced-motion`.
+El agente diseña una muestra específica del producto en `design-system/preview/source.html`: composición, contenido y comportamiento no están limitados por una plantilla. `design-system/preview/index.html` se compila desde esa fuente y los tokens actuales; la documentación Markdown/JSON sigue siendo la autoridad. En el HTML fuente coloca `<!-- opencode-design-system:theme-tokens -->` dentro de `<head>` y usa variables semánticas como `var(--ds-color-accent)` (o `var(--ds-color-accent-primary)` si el token es anidado). El compilador inyecta valores para todos los temas; la vista puede alternarlos con `document.documentElement.dataset.theme = 'dark'`. Mantén la fuente autónoma, accesible y sin recursos de red.
+
+`/design-system` puede crear esta fuente junto con la documentación y `/design-system/preview` puede crearla para un sistema existente. En regeneraciones se preserva: no se reemplaza por el dashboard genérico. Cuando falta la fuente, el visor muestra explícitamente una **vista provisional**, no un diseño final. Para modificar una preview ya diseñada, edita `preview/source.html` y vuelve a regenerar; no edites `index.html`.
+
+Usa `/design-system/review` para abrir un espacio local de revisión con la preview interactiva a la izquierda y la misma sesión de OpenCode a la derecha. Los mensajes enviados desde el panel derecho llegan a esa sesión; al terminar cada turno se actualiza la preview generada. Activa **Seleccionar elemento** para señalar componentes, patrones o muestras de tokens semánticos y adjuntar hasta ocho referencias verificadas a un mensaje. Las referencias usan nombres del manifest, rutas de archivos y rutas semánticas —no selectores del DOM— y se vuelven a comprobar antes de enviar, para no actuar silenciosamente sobre una selección obsoleta. El HTML independiente sigue disponible y funciona sin esta vista. El servidor de revisión solo escucha en `127.0.0.1`, utiliza un puerto aleatorio, se cierra al descargar el plugin y no expone las credenciales de OpenCode al navegador. Por defecto, el comando publica un enlace en la conversación en lugar de abrir automáticamente un navegador.
+
+Para abrir automáticamente el navegador del sistema al ejecutar el comando, configura esta opción del plugin:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-design-system",
+      "options": { "autoOpenReview": true }
+    }
+  ]
+}
+```
 
 Regénérala en OpenCode con `/design-system/preview` o, sin el plugin, desde la raíz del proyecto:
 
@@ -205,7 +258,7 @@ Regénérala en OpenCode con `/design-system/preview` o, sin el plugin, desde la
 node design-system/tools/generate-preview.mjs
 ```
 
-El renderer independiente no tiene dependencias externas. Edita los archivos estructurados Markdown y JSON, no el HTML generado, para cambiar el sistema.
+El generador independiente no tiene dependencias externas. En proyectos antiguos con un `tools/generate-preview.mjs` anterior, después de publicar por primera vez la fuente diseñada usa `node design-system/tools/render-authored-preview.mjs`; el plugin no sustituye herramientas locales existentes. Edita Markdown/JSON para cambiar el sistema, `preview/source.html` para cambiar su demostración, y nunca el HTML generado.
 
 ## Desarrollo y pruebas
 
@@ -216,7 +269,7 @@ npm test
 npm run build
 ```
 
-Las pruebas cubren un flujo integrado en un proyecto temporal: análisis de solo lectura, creación y conservación de archivos del usuario, actualización del bloque administrado de `AGENTS.md`, especificaciones de pantallas, cambios de tokens entre temas, vistas previas, comprobaciones y seguridad de rutas.
+Las pruebas cubren un flujo integrado en un proyecto temporal: análisis de solo lectura, creación y conservación de archivos del usuario, actualización del bloque administrado de `AGENTS.md`, especificaciones de pantallas, cambios de tokens entre temas, vistas previas, la vista local autenticada y la validación de referencias de elementos, comprobaciones y seguridad de rutas.
 
 ## Publicar una versión
 
