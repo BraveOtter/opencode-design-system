@@ -1,12 +1,12 @@
 # OpenCode Design System
 
 [![Version npm](https://img.shields.io/npm/v/opencode-design-system)](https://www.npmjs.com/package/opencode-design-system)
-[![Licence MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/BraveOtter/opencode-design-system/blob/main/LICENSE)
+[![Licence MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/BraveOtter/opencode-design-system/blob/master/LICENSE)
 [![OpenCode v2](https://img.shields.io/badge/OpenCode-v2-6f42c1)](https://opencode.ai/v2/docs/)
 
 **Un plugin collaboratif pour OpenCode v2, conçu pour créer et faire évoluer des systèmes de design portables, indépendants des frameworks et que les agents IA peuvent réellement suivre.**
 
-[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/main/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/main/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/main/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/main/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/main/README.ja.md)
+[English](https://github.com/BraveOtter/opencode-design-system/blob/master/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/master/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/master/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/master/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/master/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/master/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/master/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/master/README.ja.md)
 
 > **Avis :** Il s’agit d’un projet communautaire indépendant. Il n’est pas développé par l’équipe OpenCode et n’est affilié à OpenCode d’aucune manière.
 
@@ -274,4 +274,4 @@ git push --follow-tags
 
 ## Licence
 
-Ce projet est distribué sous la [licence MIT](https://github.com/BraveOtter/opencode-design-system/blob/main/LICENSE).
+Ce projet est distribué sous la [licence MIT](https://github.com/BraveOtter/opencode-design-system/blob/master/LICENSE).

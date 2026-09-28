@@ -1,12 +1,12 @@
 # OpenCode Design System
 
 [![npm 版本](https://img.shields.io/npm/v/opencode-design-system)](https://www.npmjs.com/package/opencode-design-system)
-[![MIT 许可证](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/BraveOtter/opencode-design-system/blob/main/LICENSE)
+[![MIT 许可证](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/BraveOtter/opencode-design-system/blob/master/LICENSE)
 [![OpenCode v2](https://img.shields.io/badge/OpenCode-v2-6f42c1)](https://opencode.ai/v2/docs/)
 
 **一个面向 OpenCode v2 的协作式插件，用于创建和演进可移植、与框架无关且能让 AI 智能体真正遵循的设计系统。**
 
-[English](https://github.com/BraveOtter/opencode-design-system/blob/main/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/main/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/main/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/main/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/main/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/main/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/main/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/main/README.ja.md)
+[English](https://github.com/BraveOtter/opencode-design-system/blob/master/README.md) · [Español](https://github.com/BraveOtter/opencode-design-system/blob/master/README.es.md) · [Português (Brasil)](https://github.com/BraveOtter/opencode-design-system/blob/master/README.pt-BR.md) · [Deutsch](https://github.com/BraveOtter/opencode-design-system/blob/master/README.de.md) · [Français](https://github.com/BraveOtter/opencode-design-system/blob/master/README.fr.md) · [Italiano](https://github.com/BraveOtter/opencode-design-system/blob/master/README.it.md) · [简体中文](https://github.com/BraveOtter/opencode-design-system/blob/master/README.zh-CN.md) · [日本語](https://github.com/BraveOtter/opencode-design-system/blob/master/README.ja.md)
 
 > **声明：** 这是一个独立的社区项目，并非由 OpenCode 团队开发，也与 OpenCode 没有任何关联。
 
@@ -274,4 +274,4 @@ git push --follow-tags
 
 ## 许可证
 
-本项目采用 [MIT 许可证](https://github.com/BraveOtter/opencode-design-system/blob/main/LICENSE)。
+本项目采用 [MIT 许可证](https://github.com/BraveOtter/opencode-design-system/blob/master/LICENSE)。
