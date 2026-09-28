@@ -1,29 +1,36 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { Plugin } from "@opencode/plugin"
-import { createDesignSystem, readManifest, regeneratePreview } from "./generator.js"
+import type { Skill } from "@opencode/plugin"
+import { authorPreview, createDesignSystem, readManifest, regeneratePreview } from "./generator.js"
 import { readJson, readText, fileExists } from "./io.js"
 import { DESIGN_SYSTEM_DIR } from "./paths.js"
 import { analyzeProject, checkProject } from "./project-analysis.js"
 import { saveScreenSpec } from "./screen.js"
 import { updateDesignSystem } from "./update.js"
+import { createReviewService } from "./review.js"
+import { designSkillDirective, loadDesignSkills } from "./design-skills.js"
 import type { CreateInput, DesignSystemManifest, Preference, UpdateInput } from "./types.js"
 
-const commandPrompts: Array<{ name: string; description: string; instruction: string }> = [
+const commandPrompts: Array<{ name: string; description: string; instruction: string; useDesignSkills?: boolean }> = [
   {
     name: "design-system",
     description: "Create a Design System collaboratively, from scratch or from an existing UI",
-    instruction: `Act as a collaborative design-system designer. Gather only identity decisions that are genuinely unclear; honor explicit preferences. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with neutral tokens, foundations, explicit preferences, a few useful components and patterns, and source evidence. Keep status draft until reviewed. Do not modify application files.\n\nUser request:`,
+    useDesignSkills: true,
+    instruction: `Act as a collaborative design-system designer. Gather only identity decisions that are genuinely unclear; honor explicit preferences. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with semantic tokens, foundations, explicit preferences, useful components and patterns, source evidence, and a bespoke previewSource. Design the preview yourself for this product: specific content, hierarchy, composition and working examples of its distinctive components, not a generic dashboard or renamed demo template. Use semantic --ds- token variables and the required theme marker. If you cannot supply previewSource at creation, immediately use design_system_preview with authored source before presenting the preview as finished. Keep status draft until reviewed. Do not modify application files.\n\nUser request:`,
   },
   {
     name: "design-system/update",
     description: "Make a coherent, versioned change to the existing Design System",
+    useDesignSkills: true,
     instruction: `Work collaboratively as a design-system architect. Read the Design System first using design_system_read. Interpret the request semantically, identify impacted token paths and dependent components/patterns, and honor recorded decisions. If the request conflicts with an explicit preference, ask before changing it. For a clear requested change, apply it with design_system_update, explain the dependency impact, provide revised full componentUpdates/patternUpdates where documented behavior or guidance needs a semantic change, add tokens only when existing semantic paths do not fit and then provide a value for every theme, add reusable components/patterns when composition is insufficient, update preferences/decisions/foundations where appropriate, choose patch/minor/major impact (expansion requires at least minor), and report unresolved references. Do not use blind text replacement and do not modify app UI code.\n\nUser request:`,
   },
   {
     name: "design-system/preview",
     description: "Generate or refresh the interactive Design System preview",
-    instruction: `Call design_system_preview to regenerate the interactive preview from the structured manifest, tokens, foundations, components, and patterns. Summarize the output file and whether light/dark themes and interactive examples are present. Do not treat the HTML as source of truth.\n\nUser request:`,
+    useDesignSkills: true,
+    instruction: `Read the Design System's manifest, preferences, decisions, foundations, tokens, and relevant component/pattern specifications first. Design a bespoke, self-contained interactive showcase for this product; you own its composition, hierarchy, writing and interaction. Do not reproduce the generic dashboard template. Show documented signature components in realistic contexts, not merely in a list. If design-system/preview/source.html exists, read it and edit that file deliberately using the normal file-edit tools; preserve intentional existing work. If it does not, inspect any existing customized preview for useful ideas before replacing generated output, then call design_system_preview with source containing a complete HTML document and <!-- opencode-design-system:theme-tokens --> inside <head>. Use var(--ds-color-accent) etc. for documented semantic tokens; theme CSS is injected from tokens.json and [data-theme] can be switched by your script. Add data-review-select="component" or "pattern", data-review-name, and data-review-file to the corresponding examples using exact manifest records, so review selection stays available without constraining layout. Keep the preview self-contained (no external assets/network); include responsive layout, working examples, keyboard/focus and reduced-motion behavior. Run design_system_preview without source after editing and inspect the output; if its mode is provisional, the task is NOT complete. Do not edit generated preview/index.html as source, alter application files, or silently change the approved identity. Report what was designed and what remains provisional.\n\nUser request:`,
   },
   {
     name: "design-system/check",
@@ -33,6 +40,7 @@ const commandPrompts: Array<{ name: string; description: string; instruction: st
   {
     name: "design-screen",
     description: "Design a screen specification using relevant Design System documentation",
+    useDesignSkills: true,
     instruction: `Act as a UI/UX screen designer. First call design_system_read with the user's task to load only the relevant tokens, components, patterns, preferences, and guidelines. Clarify the screen's purpose and key content when needed, then define hierarchy, layout, data, states, interactions, responsive behavior, and accessibility. Keep design separate from implementation. Call design_system_screen_spec to save an implementation-ready Markdown specification under design-system/screens/. Do not write UI code unless asked separately.\n\nUser request:`,
   },
 ]
@@ -42,7 +50,29 @@ export default Plugin.define({
   async setup(ctx) {
     const projectRoot = path.resolve(ctx.location.project.canonical || ctx.location.directory)
     const designSystemPath = path.join(projectRoot, DESIGN_SYSTEM_DIR, "manifest.json")
+    const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+    const designSkills = await loadDesignSkills(pluginRoot, ctx.options)
+    await ctx.skill.transform((editor) => {
+      for (const skill of designSkills) {
+        editor.add({
+          ...skill,
+          id: skill.id as Skill.ID,
+          name: skill.name as Skill.Name,
+          path: skill.path as Skill.Info["path"],
+          autoinvoke: true,
+        })
+      }
+    })
+    const designSkillsGuidance = designSkillDirective(designSkills)
+    const review = createReviewService({
+      projectRoot,
+      context: ctx,
+      autoOpen: ctx.options.autoOpenReview === true,
+    })
     await ctx.session.hook("context", (event) => {
+      if (designSkills.length > 0) {
+        event.system.push({ type: "text", text: designSkillsGuidance })
+      }
       if (!existsSync(designSystemPath)) return
       event.system.push({
         type: "text",
@@ -60,12 +90,36 @@ export default Plugin.define({
             await ctx.session.prompt({
               ...prompt,
               sessionID,
-              text: `${command.instruction}${suffix}`,
+              text: `${command.useDesignSkills ? `${designSkillsGuidance}\n\n` : ""}${command.instruction}${suffix}`,
               delivery,
             })
           },
         })
       }
+      editor.add({
+        name: "design-system/review",
+        description: "Open a local Design System review with this session and contextual element selection",
+        execute: async ({ sessionID }) => {
+          try {
+            const result = await review.open(sessionID)
+            const opening = result.browserOpened
+              ? "The review has been opened in the default browser."
+              : result.browserError
+                ? "The review could not be opened automatically in the default browser."
+                : "Copy the link below and open it in a browser on this computer to start the review."
+            await ctx.session.prompt({
+              sessionID,
+              delivery: "steer",
+              text: `The Design System review is ready and linked to this conversation. ${opening}\n\nReview URL: ${result.url}\n\nPresent the exact URL above both as a clickable Markdown link and as a plain-text URL the user can copy. Do not open it with browser tools; the user is in the TUI and will open it in their regular browser. Explain that the review shares this session and that the link works only while OpenCode is running.`,
+            })
+          } catch (error) {
+            await ctx.session.synthetic({
+              sessionID,
+              text: `Could not start the Design System review: ${error instanceof Error ? error.message : String(error)}. Check that the Design System exists and try again.`,
+            })
+          }
+        },
+      })
     })
 
     await ctx.tool.transform((editor) => {
@@ -83,7 +137,8 @@ export default Plugin.define({
             name: { type: "string", description: "Short Design System name." },
             description: { type: "string", description: "Product context and concise visual direction." },
             tokens: { type: "object", description: "Framework-neutral semantic tokens. Include schemaVersion and themes, with semantic groups such as color, typography, spacing, radius, elevation, motion, and breakpoints." },
-            foundations: { type: "string", description: "Human-readable design philosophy and foundation rules in Markdown." },
+             foundations: { type: "string", description: "Human-readable design philosophy and foundation rules in Markdown." },
+             previewSource: { type: "string", description: "Agent-designed complete self-contained HTML showcase, not a fixed template. Include <!-- opencode-design-system:theme-tokens --> inside <head>; use var(--ds-color-accent) and other semantic --ds- variables. Written to preview/source.html; preview/index.html is generated from it." },
             preferences: { type: "array", items: preferenceSchema },
             components: { type: "array", items: componentSchema },
             patterns: { type: "array", items: patternSchema },
@@ -145,10 +200,10 @@ export default Plugin.define({
       })
       editor.add({
         name: "preview",
-        description: "Regenerate the self-contained interactive HTML preview from the current structured Design System files.",
+         description: "Publish an agent-authored project-specific HTML showcase or regenerate it from preview/source.html and the current tokens. Without authored source, returns a clearly provisional fallback.",
         options: { namespace: "design_system", codemode: true },
-        input: { type: "object", properties: {}, additionalProperties: false },
-        execute: async () => ({ content: JSON.stringify(await regeneratePreview(projectRoot), null, 2) }),
+         input: { type: "object", properties: { source: { type: "string", description: "Complete bespoke HTML document with <!-- opencode-design-system:theme-tokens --> inside <head>; creates preview/source.html only if absent. Edit existing source with file tools, then call preview without source." } }, additionalProperties: false },
+         execute: async (raw) => ({ content: JSON.stringify(typeof (raw as { source?: string }).source === "string" ? await authorPreview(projectRoot, (raw as { source: string }).source) : await regeneratePreview(projectRoot), null, 2) }),
       })
       editor.add({
         name: "check",
@@ -174,7 +229,7 @@ export default Plugin.define({
       })
     })
 
-    return () => undefined
+    return () => review.close()
   },
 })
 

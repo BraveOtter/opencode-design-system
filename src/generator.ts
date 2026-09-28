@@ -7,6 +7,7 @@ import { aiGuidelines, componentMarkdown, projectAgentsBlock, patternMarkdown } 
 import { atomicWrite, fileExists, readJson, readText as readFileText, updateManagedBlock } from "./io.js"
 import { manifestSchema, tokensSchema, validateTokens } from "./schema.js"
 import { createPreviewHtml } from "./preview.js"
+import { renderAuthoredPreview } from "../templates/authored-preview.mjs"
 
 const SCHEMA_VERSION = "1.0.0"
 const INITIAL_VERSION = "0.1.0"
@@ -94,8 +95,11 @@ export async function createDesignSystem(root: string, input: CreateInput): Prom
     ["README.md", systemReadme(manifest)],
     ["tools/generate-preview.mjs", await readFile(new URL("../templates/generate-preview.mjs", import.meta.url), "utf8")],
     ["tools/preview-renderer.mjs", await readFile(new URL("../templates/preview-renderer.mjs", import.meta.url), "utf8")],
-    ["preview/index.html", createPreviewHtml({ manifest, tokens, components, patterns })],
+    ["tools/authored-preview.mjs", await readFile(new URL("../templates/authored-preview.mjs", import.meta.url), "utf8")],
+    ["tools/render-authored-preview.mjs", await readFile(new URL("../templates/render-authored-preview.mjs", import.meta.url), "utf8")],
+    ["preview/index.html", input.previewSource ? renderAuthoredPreview(input.previewSource, tokens) : createPreviewHtml({ manifest, tokens, components, patterns })],
   ])
+  if (input.previewSource) files.set("preview/source.html", input.previewSource)
   for (const [index, component] of components.entries()) files.set(manifest.components[index]!.file, componentMarkdown(component))
   for (const [index, pattern] of patterns.entries()) files.set(manifest.patterns[index]!.file, patternMarkdown(pattern))
 
@@ -137,14 +141,42 @@ export async function createDesignSystem(root: string, input: CreateInput): Prom
   return { success: true, manifest, files: [...files.keys()].map((file) => `${DESIGN_SYSTEM_DIR}/${file}`) }
 }
 
-export async function regeneratePreview(root: string): Promise<{ preview: string; componentCount: number; patternCount: number }> {
+export async function regeneratePreview(root: string): Promise<{ preview: string; componentCount: number; patternCount: number; mode: "authored" | "provisional" }> {
   const manifest = await readManifest(root)
   const tokens = await readJson<Record<string, unknown>>(root, `${DESIGN_SYSTEM_DIR}/${manifest.tokens}`)
+  const sourcePath = `${DESIGN_SYSTEM_DIR}/preview/source.html`
+  if (await fileExists(root, sourcePath)) {
+    const source = await readText(root, sourcePath)
+    const html = renderAuthoredPreview(source, tokens)
+    await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, html)
+    return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: manifest.components.length, patternCount: manifest.patterns.length, mode: "authored" }
+  }
   const components = await Promise.all(manifest.components.map(async (item) => parseComponent(item.name, await readText(root, `${DESIGN_SYSTEM_DIR}/${item.file}`), item.tokens)))
   const patterns = await Promise.all(manifest.patterns.map(async (item) => parsePattern(item.name, await readText(root, `${DESIGN_SYSTEM_DIR}/${item.file}`), item.tokens)))
   const html = createPreviewHtml({ manifest, tokens, components, patterns })
   await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, html)
-  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: components.length, patternCount: patterns.length }
+  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: components.length, patternCount: patterns.length, mode: "provisional" }
+}
+
+export async function authorPreview(root: string, source: string): Promise<Awaited<ReturnType<typeof regeneratePreview>>> {
+  const manifest = await readManifest(root)
+  const tokens = await readJson<Record<string, unknown>>(root, `${DESIGN_SYSTEM_DIR}/${manifest.tokens}`)
+  const compiled = renderAuthoredPreview(source, tokens)
+  const sourcePath = `${DESIGN_SYSTEM_DIR}/preview/source.html`
+  // Never silently replace a project's own preview source. Agent revisions to an
+  // existing source belong in an explicit file edit, followed by regeneration.
+  if (await fileExists(root, sourcePath)) throw new Error(`${sourcePath} already exists. Read and edit it deliberately, then call design_system_preview without source.`)
+  for (const file of ["authored-preview.mjs", "render-authored-preview.mjs"]) {
+    const destination = `${DESIGN_SYSTEM_DIR}/tools/${file}`
+    if (!await fileExists(root, destination)) {
+      await writeFile(resolveInside(root, destination), await readFile(new URL(`../templates/${file}`, import.meta.url), "utf8"), { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "EEXIST") throw error
+      })
+    }
+  }
+  await writeFile(resolveInside(root, sourcePath), source, { flag: "wx" })
+  await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, compiled)
+  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: manifest.components.length, patternCount: manifest.patterns.length, mode: "authored" }
 }
 
 export async function readManifest(root: string): Promise<DesignSystemManifest> {
@@ -185,6 +217,7 @@ function validateCreateInput(input: CreateInput): void {
   if (!input.name?.trim()) throw new Error("name is required")
   if (!input.description?.trim()) throw new Error("description is required")
   if (!input.foundations?.trim()) throw new Error("foundations must contain the agreed design foundations")
+  if (input.previewSource !== undefined && !input.previewSource.trim()) throw new Error("previewSource must contain a complete authored HTML document")
   const tokenErrors = validateTokens(input.tokens)
   if (tokenErrors.length) throw new Error(tokenErrors.join("; "))
   if (input.preferences && input.preferences.some((item) => !item.key || item.value === undefined)) throw new Error("Each preference requires a key and value")
@@ -240,7 +273,7 @@ function initialDecisions(preferences: Preference[]): string {
 }
 
 function systemReadme(manifest: DesignSystemManifest): string {
-  return `# ${manifest.name}\n\n${manifest.description}\n\n- **Status:** ${manifest.status}\n- **Design System version:** ${manifest.designSystemVersion}\n- **Schema version:** ${manifest.schemaVersion}\n- **Source:** ${manifest.source.type}\n\n## Source of truth\n\nStart with [manifest.json](manifest.json), which indexes the [semantic tokens](tokens.json), [foundations](FOUNDATIONS.md), [AI guidelines](AI-GUIDELINES.md), [preferences](preferences.json), [decisions](DECISIONS.md), component and pattern documentation, and the generated [interactive preview](preview/index.html).\n\nThe definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview.\n\n## Progressive loading\n\nRead the manifest and AI guidelines first. Load only task-relevant component and pattern files and the token branches they reference. Screen design briefs go in [screens/](screens/).\n\n## Plugin-independent maintenance\n\nThis project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system; no project-local plugin agents, commands, or skills are required.\n`
+  return `# ${manifest.name}\n\n${manifest.description}\n\n- **Status:** ${manifest.status}\n- **Design System version:** ${manifest.designSystemVersion}\n- **Schema version:** ${manifest.schemaVersion}\n- **Source:** ${manifest.source.type}\n\n## Source of truth\n\nStart with [manifest.json](manifest.json), which indexes the [semantic tokens](tokens.json), [foundations](FOUNDATIONS.md), [AI guidelines](AI-GUIDELINES.md), [preferences](preferences.json), [decisions](DECISIONS.md), component and pattern documentation, and the generated [interactive preview](preview/index.html).\n\nThe definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview. An agent can create a project-specific [preview/source.html](preview/source.html); its CSS uses \`var(--ds-color-accent)\` and other semantic token variables, with \`<!-- opencode-design-system:theme-tokens -->\` inside <head>. It is a showcase, not the design specification. The HTML output is regenerated without replacing its source.\n\n## Progressive loading\n\nRead the manifest and AI guidelines first. Load only task-relevant component and pattern files and the token branches they reference. Screen design briefs go in [screens/](screens/).\n\n## Plugin-independent maintenance\n\nRun node design-system/tools/generate-preview.mjs from the project root to regenerate the preview from structured tokens and, if present, the authored source. For older installations with an existing generator, use node design-system/tools/render-authored-preview.mjs after adding preview/source.html. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system.\n`
 }
 
 function pretty(value: unknown): string {

@@ -64,6 +64,19 @@ These instructions are the operational contract for any agent that designs or im
 - When the system status is **draft** or **review**, communicate unresolved decisions rather than presenting them as settled.
 - When changing the system without its plugin, edit the existing semantic token paths and affected specifications deliberately, record the decision, update the version and changelog, then run the included Node.js preview generator. Never treat regenerated HTML as input data.
 
+## Distinctive, coherent design
+
+- Derive visual direction from the product, audience, task, and explicit preferences—not from a reusable AI aesthetic. Common patterns such as generic purple gradients, identical card grids, decorative all-caps labels, or glowing/pulsing status dots are not defaults; use them only when the brief gives them a purpose.
+- Make hierarchy, density, typography, layout, and component states intentional. Reuse documented tokens and components; do not introduce a parallel design-system vocabulary or replace existing decisions without agreement.
+- A status must not rely on color alone. Pair its visual treatment with an accessible name, text, icon, or other meaningful cue. Motion should communicate a change and respect reduced-motion preferences.
+
+## Accessibility while choosing tokens
+
+- Validate intended semantic foreground/background pairs in every supported theme, rather than comparing every color with every other color. Include text, controls, meaningful graphics, status, and focus states.
+- Use WCAG 2.2 AA contrast minimums where applicable: 4.5:1 for normal text and 3:1 for large text and meaningful non-text UI information. Check actual composited colors and do not round failures up.
+- If a requested color role fails, explain the specific pair and offer a nearby role-specific alternative that preserves the visual direction. Do not claim WCAG conformance based on tokens alone; rendered states still need review.
+- Keep visible keyboard focus. Treat WCAG 2.4.13 Focus Appearance as AAA, not as an AA requirement, and do not present a universal 2px ring as a WCAG minimum.
+
 ## Explicit user preferences
 
 ${preferenceLines}

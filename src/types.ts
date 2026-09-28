@@ -74,6 +74,7 @@ export interface CreateInput {
   sourceType?: "from-scratch" | "existing-project"
   evidence?: string[]
   status?: "draft" | "review" | "stable"
+  previewSource?: string
 }
 
 export interface TokenUpdate {

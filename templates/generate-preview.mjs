@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createPreviewHtml } from "./preview-renderer.mjs"
+import { renderAuthoredPreview } from "./authored-preview.mjs"
 
 const templateRoot = path.dirname(fileURLToPath(import.meta.url))
 const systemRoot = path.resolve(templateRoot, "..")
@@ -35,6 +36,17 @@ function bullets(markdown, heading) {
 async function main() {
   const manifest = await json("manifest.json")
   const tokenDocument = await json(manifest.tokens || "tokens.json")
+  const authoredSource = insideSystem("preview/source.html")
+  try {
+    const source = await readFile(authoredSource, "utf8")
+    const destination = insideSystem(manifest.preview || "preview/index.html")
+    await mkdir(path.dirname(destination), { recursive: true })
+    await writeFile(destination, renderAuthoredPreview(source, tokenDocument), "utf8")
+    console.log("Generated " + path.relative(projectRoot, destination).split(path.sep).join("/"))
+    return
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
+  }
   const components = await Promise.all((manifest.components || []).map(async (item) => {
     const markdown = await text(item.file)
     return {

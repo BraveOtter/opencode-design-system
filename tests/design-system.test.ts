@@ -6,7 +6,7 @@ import { promisify } from "node:util"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { createDesignSystem, regeneratePreview } from "../src/generator.js"
+import { authorPreview, createDesignSystem, regeneratePreview } from "../src/generator.js"
 import { resolveInside } from "../src/paths.js"
 import { analyzeProject, checkProject } from "../src/project-analysis.js"
 import { saveScreenSpec } from "../src/screen.js"
@@ -21,6 +21,45 @@ afterEach(async () => {
 })
 
 describe("Design System end-to-end flow", () => {
+  const bespokeSource = `<!doctype html><html lang="es" data-theme="light"><head><meta charset="utf-8"><!-- opencode-design-system:theme-tokens --><style>body{background:var(--ds-color-surface-base);color:var(--ds-color-text-primary)}button{background:var(--ds-color-accent-primary);color:var(--ds-color-onAccent)}@media(prefers-reduced-motion:reduce){*{animation:none!important}}</style></head><body><main><h1>Turno de recepción del taller</h1><button type="button" data-review-select="component" data-review-name="Button" data-review-file="components/button.md" onclick="document.querySelector('output').textContent='Orden iniciada'">Iniciar orden</button><output></output><button type="button" onclick="document.documentElement.dataset.theme='dark'">Tema oscuro</button></main></body></html>`
+
+  it("creates an agent-designed showcase, retains its source on refresh and token updates, and regenerates portably", async () => {
+    const root = await projectFixture()
+    const input = fixtureInput()
+    input.previewSource = bespokeSource
+    await createDesignSystem(root, input)
+    const sourcePath = path.join(root, "design-system", "preview", "source.html")
+    const previewPath = path.join(root, "design-system", "preview", "index.html")
+    expect(await readFile(sourcePath, "utf8")).toBe(bespokeSource)
+    const initial = await readFile(previewPath, "utf8")
+    expect(initial).toContain("Turno de recepción del taller")
+    expect(initial).toContain('--ds-color-accent-primary:#276f55')
+    expect(initial).toContain(':root[data-theme="dark"]')
+    expect(initial).toContain('design-system-review-connect')
+    expect(initial).toContain('data-review-file="components/button.md"')
+    expect(initial).not.toContain("Good morning, Alex")
+    expect((await regeneratePreview(root)).mode).toBe("authored")
+    await updateDesignSystem(root, { request: "Adjust workshop accent", tokenUpdates: [{ path: "color.accent.primary", value: "#ab4b21" }], decision: "Keep the workshop scene, adjust accent.", impact: "patch" })
+    expect(await readFile(sourcePath, "utf8")).toBe(bespokeSource)
+    expect(await readFile(previewPath, "utf8")).toContain('--ds-color-accent-primary:#ab4b21')
+    await execFileAsync(process.execPath, [path.join(root, "design-system", "tools", "generate-preview.mjs")], { cwd: root })
+    expect(await readFile(previewPath, "utf8")).toContain("Turno de recepción del taller")
+    expect(await readFile(previewPath, "utf8")).toContain('--ds-color-accent-primary:#ab4b21')
+  })
+
+  it("publishes an authored preview for an existing system without overwriting user-owned source", async () => {
+    const root = await projectFixture()
+    await createDesignSystem(root, fixtureInput())
+    expect((await regeneratePreview(root)).mode).toBe("provisional")
+    await expect(authorPreview(root, "<html><head></head><body></body></html>")).rejects.toThrow(/theme-tokens/)
+    expect(existsSync(path.join(root, "design-system", "preview", "source.html"))).toBe(false)
+    expect((await authorPreview(root, bespokeSource)).mode).toBe("authored")
+    await expect(authorPreview(root, bespokeSource)).rejects.toThrow(/already exists/)
+    expect(await readFile(path.join(root, "design-system", "preview", "source.html"), "utf8")).toBe(bespokeSource)
+    await execFileAsync(process.execPath, [path.join(root, "design-system", "tools", "render-authored-preview.mjs")], { cwd: root })
+    expect(await readFile(path.join(root, "design-system", "preview", "index.html"), "utf8")).toContain("Turno de recepción del taller")
+  })
+
   it("analyzes existing UI read-only, creates a portable system, designs a screen, then updates token dependents and preview", async () => {
     const root = await projectFixture()
     const appCss = await readFile(path.join(root, "src", "styles.css"), "utf8")
@@ -116,6 +155,9 @@ It does not need a distinct surface.
     const guidelines = await readFile(path.join(root, "design-system", "AI-GUIDELINES.md"), "utf8")
     expect(guidelines).toContain("nearly-square")
     expect(guidelines).toContain("no-gradients")
+    expect(guidelines).toContain("glowing/pulsing status dots")
+    expect(guidelines).toContain("Validate intended semantic foreground/background pairs")
+    expect(guidelines).toContain("Focus Appearance as AAA")
     const generatedPreview = await readFile(path.join(root, "design-system", "preview", "index.html"), "utf8")
     const portableRun = await execFileAsync(process.execPath, [path.join(root, "design-system", "tools", "generate-preview.mjs")], { cwd: root })
     expect(portableRun.stdout).toContain("Generated design-system/preview/index.html")
@@ -125,6 +167,17 @@ It does not need a distinct surface.
     expect(preview).toContain("role=\"dialog\"")
     expect(preview).toContain("setTheme")
     expect(preview).toContain("4px")
+    expect(preview).toContain('id="app-preview"')
+    expect(preview).toContain('data-preview-action="New project"')
+    expect(preview).toContain('href="#component-0"')
+    expect(preview).toContain('id="component-0"')
+    expect(preview).toContain('href="#pattern-0"')
+    expect(preview).toContain('id="pattern-0"')
+    expect(preview).not.toMatch(/href="\.\.\/(components|patterns)\//)
+    for (const [, anchor] of preview.matchAll(/href="#(component-\d+)"/g)) expect(preview).toContain(`id="${anchor}"`)
+    for (const [, anchor] of preview.matchAll(/href="#(pattern-\d+)"/g)) expect(preview).toContain(`id="${anchor}"`)
+    expect(preview).toContain("Diseña con ritmo y claridad.")
+    expect(preview).toContain("sample.style.fontFamily=value")
     expect(await readFile(path.join(root, "src", "styles.css"), "utf8")).toBe(appCss)
 
     const check = await checkProject(root)

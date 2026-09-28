@@ -1,6 +1,7 @@
 // src/index.ts
 import { existsSync } from "fs";
-import path5 from "path";
+import path6 from "path";
+import { fileURLToPath } from "url";
 import { Plugin } from "@opencode/plugin";
 
 // src/generator.ts
@@ -102,6 +103,19 @@ These instructions are the operational contract for any agent that designs or im
 - Do not alter existing application components as part of Design System analysis or generation unless explicitly asked.
 - When the system status is **draft** or **review**, communicate unresolved decisions rather than presenting them as settled.
 - When changing the system without its plugin, edit the existing semantic token paths and affected specifications deliberately, record the decision, update the version and changelog, then run the included Node.js preview generator. Never treat regenerated HTML as input data.
+
+## Distinctive, coherent design
+
+- Derive visual direction from the product, audience, task, and explicit preferences\u2014not from a reusable AI aesthetic. Common patterns such as generic purple gradients, identical card grids, decorative all-caps labels, or glowing/pulsing status dots are not defaults; use them only when the brief gives them a purpose.
+- Make hierarchy, density, typography, layout, and component states intentional. Reuse documented tokens and components; do not introduce a parallel design-system vocabulary or replace existing decisions without agreement.
+- A status must not rely on color alone. Pair its visual treatment with an accessible name, text, icon, or other meaningful cue. Motion should communicate a change and respect reduced-motion preferences.
+
+## Accessibility while choosing tokens
+
+- Validate intended semantic foreground/background pairs in every supported theme, rather than comparing every color with every other color. Include text, controls, meaningful graphics, status, and focus states.
+- Use WCAG 2.2 AA contrast minimums where applicable: 4.5:1 for normal text and 3:1 for large text and meaningful non-text UI information. Check actual composited colors and do not round failures up.
+- If a requested color role fails, explain the specific pair and offer a nearby role-specific alternative that preserves the visual direction. Do not claim WCAG conformance based on tokens alone; rendered states still need review.
+- Keep visible keyboard focus. Treat WCAG 2.4.13 Focus Appearance as AAA, not as an AA requirement, and do not present a universal 2px ring as a WCAG minimum.
 
 ## Explicit user preferences
 
@@ -314,15 +328,16 @@ function createPreviewHtml({ manifest, tokens, components, patterns }) {
   const themeNames = Object.keys(themes);
   const firstTheme = themeNames[0] ?? "light";
   const themeData = Object.fromEntries(themeNames.map((name) => [name, normalizeTheme(themes[name])]));
-  const componentCards = components.map((component, index) => componentCard(component, index)).join("\n");
-  const patternCards = patterns.map((pattern) => `
-    <article class="spec-card">
-      <p class="eyebrow">Pattern</p><h3>${escapeHtml(pattern.name)}</h3>
-      <p>${escapeHtml(pattern.purpose)}</p>
-      <p class="muted">${escapeHtml(pattern.guidance && pattern.guidance !== pattern.purpose ? pattern.guidance : pattern.composition?.join(" \xB7 ") || pattern.guidance || "")}</p>
-    </article>`).join("\n");
-  const componentIndex = manifest.components.map((item) => `<li><a href="../${escapeHtml(item.file)}">${escapeHtml(item.name)}</a></li>`).join("");
-  const patternIndex = manifest.patterns.map((item) => `<li><a href="../${escapeHtml(item.file)}">${escapeHtml(item.name)}</a></li>`).join("");
+  const componentRecords = new Map((manifest.components ?? []).map((item) => [item.name, item]));
+  const patternRecords = new Map((manifest.patterns ?? []).map((item) => [item.name, item]));
+  const componentCards = components.map((component, index) => componentCard(component, index, componentRecords.get(component.name))).join("\n");
+  const patternCards = patterns.map((pattern, index) => {
+    const record = patternRecords.get(pattern.name);
+    const selectionAttributes = record?.file ? `data-review-select="pattern" data-review-name="${escapeHtml(pattern.name)}" data-review-file="${escapeHtml(record.file)}"` : "";
+    return patternCard(pattern, index, selectionAttributes);
+  }).join("\n");
+  const componentIndex = manifest.components.map((item, index) => `<li><a href="#component-${index}">${escapeHtml(item.name)}</a></li>`).join("");
+  const patternIndex = manifest.patterns.map((item, index) => `<li><a href="#pattern-${index}">${escapeHtml(item.name)}</a></li>`).join("");
   return `<!doctype html>
 <html lang="en" data-theme="${escapeHtml(firstTheme)}">
 <head>
@@ -341,20 +356,25 @@ function createPreviewHtml({ manifest, tokens, components, patterns }) {
     .magnetic-note{font-size:.75rem;color:var(--preview-muted)}.identity-scene{perspective:var(--token-depth-cardPerspective,var(--token-depth-identityPerspective,1200px));padding:10px 6px 18px;max-width:340px}.identity-card{min-height:190px;padding:18px;border:1px solid var(--preview-border);border-radius:var(--preview-card-radius);background:var(--preview-surface);box-shadow:0 14px 34px color-mix(in srgb,var(--preview-text) 14%,transparent);transform:rotateX(var(--card-rx,0deg)) rotateY(var(--card-ry,0deg)) translateZ(var(--card-lift,0px));transform-style:preserve-3d;transition:transform 240ms ease,box-shadow 240ms ease;will-change:transform}.identity-card[data-moving="true"]{transition:none}.identity-mark{color:var(--preview-brand);font-weight:750;letter-spacing:.04em}.identity-divider{height:1px;margin:12px 0;background:var(--preview-border)}.identity-name{font-size:1.1rem;font-weight:700}.identity-meta{font-size:.78rem;color:var(--preview-muted)}
     .component-nav{padding-left:18px}.component-nav a{color:var(--preview-muted);text-decoration:none}.component-nav a:hover{color:var(--preview-brand)}.warning-note{padding:10px 12px;border:1px solid var(--preview-warning);border-radius:var(--preview-control-radius);color:var(--preview-text);font-size:.85rem}.warning-note[hidden]{display:none}.tabs{display:flex;gap:6px}.tab,.switch{border:1px solid var(--preview-border-strong);border-radius:var(--preview-control-radius);background:var(--preview-surface);color:var(--preview-text);padding:7px 10px}.tab[aria-selected="true"]{border-color:var(--preview-brand);color:var(--preview-brand)}.switch{width:46px;height:26px;padding:2px;border-radius:999px;background:var(--preview-border);position:relative}.switch::after{content:"";display:block;width:20px;height:20px;border-radius:50%;background:var(--preview-surface);transition:transform 140ms ease}.switch[aria-checked="true"]{background:var(--preview-brand)}.switch[aria-checked="true"]::after{transform:translateX(20px)}.switch-row{display:flex;align-items:center;gap:10px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.85rem}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--preview-border)}.overlay{position:fixed;inset:0;display:none;place-items:center;padding:20px;background:rgb(0 0 0 / .45);z-index:5}.overlay.open{display:grid}.dialog{width:min(100%,440px);padding:22px;border-radius:var(--preview-card-radius);background:var(--preview-surface);box-shadow:0 20px 60px rgb(0 0 0 / .25)}.toast{position:fixed;right:20px;bottom:20px;z-index:8;padding:12px 16px;border-radius:var(--preview-control-radius);background:var(--preview-text);color:var(--preview-canvas);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease}.toast.show{opacity:1;transform:translateY(0)}
     @media(max-width:760px){.shell{grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid var(--preview-border);padding:14px 18px}.nav{display:flex;overflow:auto;margin:12px 0 0}.nav a{white-space:nowrap}.sidebar .nav-label,.sidebar .side-note,.sidebar ul{display:none}main{padding:24px 18px 54px}.topbar{align-items:flex-start}.component-nav{display:none}.section-heading{align-items:flex-start;flex-direction:column}}
-    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}.button.magnetic,.identity-card{transform:none!important;will-change:auto!important}}
+     html[data-review-select-mode="true"] [data-review-select]{cursor:crosshair!important}html[data-review-select-mode="true"] [data-review-select]:hover,html[data-review-select-mode="true"] [data-review-select]:focus-visible{outline:2px solid var(--preview-focus);outline-offset:3px;position:relative;z-index:2}
+     @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}.button.magnetic,.identity-card{transform:none!important;will-change:auto!important}}
+    .app-preview-section{margin-top:48px}.app-window{overflow:hidden;border:1px solid var(--preview-border);border-radius:calc(var(--preview-card-radius) + 4px);background:var(--preview-surface);box-shadow:0 20px 56px color-mix(in srgb,var(--preview-text) 10%,transparent)}.app-chrome{display:flex;align-items:center;gap:10px;min-height:48px;padding:10px 16px;border-bottom:1px solid var(--preview-border);background:var(--preview-canvas);font-size:.72rem;color:var(--preview-muted)}.app-dots{display:flex;gap:5px}.app-dots i{width:8px;height:8px;border-radius:50%;background:var(--preview-border-strong)}.app-dots i:first-child{background:var(--preview-brand)}.app-chrome strong{color:var(--preview-text);font-weight:650}.app-chrome .tag{margin-left:auto}.app-layout{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:390px}.app-sidebar{padding:18px 12px;border-right:1px solid var(--preview-border);background:var(--preview-canvas)}.app-product{overflow:hidden;margin:0 6px 18px;font-size:.78rem;font-weight:750;text-overflow:ellipsis;white-space:nowrap}.app-nav{display:grid;gap:4px}.app-nav span{padding:8px 10px;border-radius:var(--preview-control-radius);color:var(--preview-muted);font-size:.78rem}.app-nav span:first-child{background:var(--preview-brand-subtle);color:var(--preview-brand);font-weight:650}.app-main{min-width:0;padding:clamp(16px,3vw,30px)}.app-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.app-heading h3{margin:0;font-size:1.1rem}.app-heading p{margin:3px 0 0;color:var(--preview-muted);font-size:.78rem}.app-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:20px 0}.app-stat,.app-panel{min-width:0;border:1px solid var(--preview-border);border-radius:var(--preview-control-radius);background:var(--preview-surface);padding:13px}.app-stat span{display:block;color:var(--preview-muted);font-size:.7rem}.app-stat strong{display:block;margin-top:4px;font-size:1.35rem;letter-spacing:-.04em}.app-panels{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(155px,.75fr);gap:10px}.app-panel h4{margin:0 0 12px;font-size:.78rem}.app-chart{height:120px;display:flex;align-items:end;gap:8px;padding:12px 8px 0;border-bottom:1px solid var(--preview-border);background:transparent}.app-chart span{flex:1;height:var(--bar-height);min-height:8px;border-radius:4px 4px 0 0;background:var(--preview-brand)}.app-list{display:grid;gap:9px}.app-list-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--preview-border);font-size:.72rem}.app-list-row:last-child{padding-bottom:0;border:0}.app-list-row span:last-child{color:var(--preview-muted);font-size:.66rem}.app-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:var(--preview-muted);font-size:.72rem}.app-footer .button{min-height:34px;padding:6px 11px;font-size:.75rem}.pattern-demo{margin:14px 0;padding:12px;border:1px solid var(--preview-border);border-radius:var(--preview-control-radius);background:var(--preview-canvas)}.pattern-flow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.pattern-step{display:inline-flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid var(--preview-border);border-radius:var(--preview-control-radius);background:var(--preview-surface);font-size:.72rem}.pattern-step b{display:grid;place-items:center;width:19px;height:19px;border-radius:50%;background:var(--preview-brand-subtle);color:var(--preview-brand);font-size:.62rem}.pattern-demo .app-stats{margin:0}.pattern-demo .app-stat{padding:9px}.pattern-demo .app-stat strong{font-size:1rem}.pattern-demo .app-chart{height:70px}.pattern-hero{padding:14px;border-radius:var(--preview-control-radius);background:var(--preview-brand-subtle)}.pattern-hero h4{margin:0 0 5px;font-size:1rem}.pattern-hero p{margin:0;color:var(--preview-muted);font-size:.74rem}.pattern-hero .button{margin-top:10px;min-height:32px;padding:5px 9px;font-size:.7rem}.pattern-card-demo{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:10px}.pattern-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--preview-brand-subtle);color:var(--preview-brand);font-weight:700}.pattern-card-demo strong,.pattern-card-demo small{display:block}.pattern-card-demo small{margin-top:3px;color:var(--preview-muted)}.token-demo[data-group="typography"]{height:auto;min-height:72px;padding:10px}.token-demo[data-group="typography"] .token-demo-sample{max-width:100%;min-height:0;background:transparent;color:var(--preview-text);line-height:1.2;overflow-wrap:anywhere}.token-demo[data-group="typography"] .token-demo-sample[data-sample-kind="family"]{font-size:.9rem}.token-demo[data-group="typography"] .token-demo-sample[data-sample-kind="size"]{font-weight:650}.token-demo[data-group="typography"] .token-demo-sample[data-sample-kind="line-height"]{white-space:pre-line;font-size:.82rem}
+    @media(max-width:760px){.app-layout{grid-template-columns:1fr}.app-sidebar{display:none}.app-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.app-panels{grid-template-columns:1fr}.app-heading{align-items:flex-start}.app-footer{align-items:flex-start;flex-direction:column}}
   </style>
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar" aria-label="Design system navigation">
       <div class="brand">${escapeHtml(manifest.name)}</div><div class="side-note">Design system \xB7 v${escapeHtml(manifest.designSystemVersion)}</div>
-      <nav class="nav"><a href="#overview">Overview</a><a href="#colors">Tokens</a><a href="#components">Components</a><a href="#patterns">Patterns</a><a href="#interactions">Interactions</a></nav>
+      <nav class="nav"><a href="#overview">Overview</a><a href="#app-preview">Example page</a><a href="#colors">Tokens</a><a href="#components">Components</a><a href="#patterns">Patterns</a><a href="#interactions">Interactions</a></nav>
       ${manifest.components.length ? `<div class="nav-label">Components</div><ul class="component-nav">${componentIndex}</ul>` : ""}
       ${manifest.patterns.length ? `<div class="nav-label">Patterns</div><ul class="component-nav">${patternIndex}</ul>` : ""}
     </aside>
     <main>
       <div class="topbar"><div class="status">${escapeHtml(manifest.status)}</div><button class="button secondary" id="theme-toggle" type="button" aria-label="Toggle color theme">Toggle theme</button></div>
+      <p class="warning-note" role="status">Provisional preview \xB7 This generic compatibility view is not a designed showcase. Ask the agent to create design-system/preview/source.html for this project.</p>
       <header id="overview" class="hero"><p class="eyebrow">Framework-neutral design language</p><h1>${escapeHtml(manifest.name)}</h1><p>${escapeHtml(manifest.description)}</p></header>
+      <section id="app-preview" class="app-preview-section"><div class="section-heading"><div><p class="eyebrow">In context</p><h2>A working page built from this system</h2></div><p>Interactive, illustrative UI \xB7 no app data</p></div><div class="app-window"><div class="app-chrome"><span class="app-dots" aria-hidden="true"><i></i><i></i><i></i></span><strong>${escapeHtml(manifest.name)}</strong><span class="tag">SAMPLE WORKSPACE</span></div><div class="app-layout"><aside class="app-sidebar" aria-label="Sample application navigation"><div class="app-product">${escapeHtml(manifest.name)}</div><nav class="app-nav" aria-label="Workspace"><span>Overview</span><span>Projects</span><span>People</span><span>Reports</span><span>Settings</span></nav></aside><div class="app-main"><div class="app-heading"><div><h3>Good morning, Alex</h3><p>Here is a snapshot of your workspace.</p></div><span class="badge success">All systems normal</span></div><div class="app-stats"><div class="app-stat"><span>Active projects</span><strong>12</strong></div><div class="app-stat"><span>On schedule</span><strong>84%</strong></div><div class="app-stat"><span>Team members</span><strong>08</strong></div></div><div class="app-panels"><div class="app-panel"><h4>Project activity <span class="muted">\xB7 illustrative data</span></h4><div class="app-chart" aria-label="Illustrative weekly activity chart"><span style="--bar-height:38%"></span><span style="--bar-height:58%"></span><span style="--bar-height:46%"></span><span style="--bar-height:82%"></span><span style="--bar-height:65%"></span><span style="--bar-height:94%"></span><span style="--bar-height:73%"></span></div></div><div class="app-panel"><h4>Upcoming work</h4><div class="app-list"><div class="app-list-row"><span>Review prototype</span><span>Today</span></div><div class="app-list-row"><span>Team check-in</span><span>Tomorrow</span></div><div class="app-list-row"><span>Share progress</span><span>Friday</span></div></div></div></div><div class="app-footer"><span id="app-preview-feedback" role="status" aria-live="polite">Sample content only. Try the action.</span><button class="button" type="button" data-preview-action="New project" data-feedback-target="app-preview-feedback">Create project</button></div></div></div></div></section>
       <p id="token-warning" class="warning-note" role="status" hidden></p>
       <section id="colors"><div class="section-heading"><div><p class="eyebrow">Foundations</p><h2>Semantic tokens</h2></div><p>Values generated from tokens.json</p></div><div id="token-groups" class="token-table"></div></section>
       <section id="components"><div class="section-heading"><div><p class="eyebrow">Building blocks</p><h2>Components</h2></div><p>${components.length} documented</p></div><div class="grid">${componentCards || `<p class="muted">No components documented yet.</p>`}</div></section>
@@ -375,10 +395,10 @@ function createPreviewHtml({ manifest, tokens, components, patterns }) {
   <script type="application/json" id="theme-data">${safeJson(themeData)}</script>
   <script>
     const themes=JSON.parse(document.getElementById('theme-data').textContent||'{}');
-    const themeNames=Object.keys(themes);const themeToggle=document.getElementById('theme-toggle');
+     const themeNames=Object.keys(themes);const themeToggle=document.getElementById('theme-toggle');let reviewChannel=null,reviewSelectionMode=false;const originalReviewAttributes=new WeakMap();
     function flatten(value,prefix='',out=[]){if(value&&typeof value==='object'&&!Array.isArray(value)){for(const [key,item] of Object.entries(value))flatten(item,prefix?prefix+'.'+key:key,out)}else if(['string','number','boolean'].includes(typeof value))out.push({path:prefix,value:String(value)});return out}
-    function setTheme(name){const theme=themes[name];if(!theme)return;document.documentElement.dataset.theme=name;document.documentElement.style.colorScheme=/dark/i.test(name)?'dark':'light';for(const [key,value] of Object.entries(theme.roles||{}))document.documentElement.style.setProperty('--preview-'+key.replace(/[A-Z]/g,letter=>'-'+letter.toLowerCase()),value);for(const property of [...document.documentElement.style])if(property.startsWith('--token-'))document.documentElement.style.removeProperty(property);for(const token of flatten(theme.tokens)){if(/^[w-]+(?:.[w-]+)*$/.test(token.path))document.documentElement.style.setProperty('--token-'+token.path.replaceAll('.','-'),token.value)}themeToggle.hidden=themeNames.length<2;renderTokens(theme.tokens);const missing=theme.missing||[];const warning=document.getElementById('token-warning');warning.hidden=missing.length===0;warning.textContent=missing.length?'Some preview roles use neutral defaults because matching semantic tokens were not found: '+missing.join(', ')+'.':''}
-    function renderTokens(theme){const holder=document.getElementById('token-groups');holder.replaceChildren();for(const [group,values] of Object.entries(theme||{})){if(!values||typeof values!=='object'||Array.isArray(values))continue;const section=document.createElement('div');section.className='token-group';const heading=document.createElement('h3');heading.textContent=group;section.append(heading);const swatches=document.createElement('div');swatches.className='swatches';for(const token of flatten(values,group)){const card=document.createElement('div');card.className='swatch';const sample=document.createElement('div');if(group==='color'){sample.className='swatch-color';sample.style.setProperty('--swatch-color',token.value)}else{sample.className='token-demo';sample.dataset.group=group;const shape=document.createElement('span');shape.className='token-demo-sample';shape.textContent=group==='typography'?'Aa':'';if(group==='spacing')shape.style.width=token.value;if(group==='radius'){shape.style.width='42px';shape.style.height='28px';shape.style.borderRadius=token.value}if(group==='typography'&&/family|body/i.test(token.path))shape.style.fontFamily=token.value;if(group==='typography'&&/size/i.test(token.path))shape.style.fontSize=token.value;if(group==='elevation')shape.style.boxShadow=token.value;sample.append(shape)}const label=document.createElement('div');label.className='token-label';const name=document.createElement('strong');name.textContent=token.path;const code=document.createElement('code');code.textContent=token.value;label.append(name,code);card.append(sample,label);swatches.append(card)}section.append(swatches);holder.append(section)}}
+    function setTheme(name){const theme=themes[name];if(!theme)return;document.documentElement.dataset.theme=name;document.documentElement.style.colorScheme=/dark/i.test(name)?'dark':'light';for(const [key,value] of Object.entries(theme.roles||{}))document.documentElement.style.setProperty('--preview-'+key.replace(/[A-Z]/g,letter=>'-'+letter.toLowerCase()),value);for(const property of [...document.documentElement.style])if(property.startsWith('--token-'))document.documentElement.style.removeProperty(property);for(const token of flatten(theme.tokens)){if(/^[A-Za-z0-9_-]+(?:[.][A-Za-z0-9_-]+)*$/.test(token.path))document.documentElement.style.setProperty('--token-'+token.path.replaceAll('.','-'),token.value)}themeToggle.hidden=themeNames.length<2;renderTokens(theme.tokens);const missing=theme.missing||[];const warning=document.getElementById('token-warning');warning.hidden=missing.length===0;warning.textContent=missing.length?'Some preview roles use neutral defaults because matching semantic tokens were not found: '+missing.join(', ')+'.':''}
+    function renderTokens(theme){const holder=document.getElementById('token-groups');holder.replaceChildren();for(const [group,values] of Object.entries(theme||{})){if(!values||typeof values!=='object'||Array.isArray(values))continue;const section=document.createElement('div');section.className='token-group';const heading=document.createElement('h3');heading.textContent=group;section.append(heading);const swatches=document.createElement('div');swatches.className='swatches';for(const token of flatten(values,group)){const card=document.createElement('div');card.className='swatch';card.dataset.reviewSelect='token';card.dataset.reviewPath=token.path;card.dataset.reviewTheme=document.documentElement.dataset.theme;const sample=document.createElement('div');if(group==='color'){sample.className='swatch-color';sample.style.setProperty('--swatch-color',token.value)}else{sample.className='token-demo';sample.dataset.group=group;const shape=document.createElement('span');shape.className='token-demo-sample';shape.textContent=group==='typography'?'Aa':'';if(group==='spacing')shape.style.width=token.value;if(group==='radius'){shape.style.width='42px';shape.style.height='28px';shape.style.borderRadius=token.value}if(group==='typography'&&/family|body/i.test(token.path))shape.style.fontFamily=token.value;if(group==='typography'&&/size/i.test(token.path))shape.style.fontSize=token.value;if(group==='elevation')shape.style.boxShadow=token.value;sample.append(shape)}const label=document.createElement('div');label.className='token-label';const name=document.createElement('strong');name.textContent=token.path;const code=document.createElement('code');code.textContent=token.value;label.append(name,code);card.append(sample,label);swatches.append(card)}section.append(swatches);holder.append(section)}if(reviewSelectionMode)applyReviewSelectionMode(true)}
     themeToggle.addEventListener('click',()=>{const index=themeNames.indexOf(document.documentElement.dataset.theme);setTheme(themeNames[(index+1)%themeNames.length])});
     for(const button of document.querySelectorAll('[role=tab]')){button.addEventListener('click',()=>{for(const tab of document.querySelectorAll('[role=tab]')){const selected=tab===button;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;document.getElementById(tab.getAttribute('aria-controls')).hidden=!selected}});button.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const tabs=[...document.querySelectorAll('[role=tab]')];const next=(tabs.indexOf(button)+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();tabs[next].click()})}
     document.querySelector('[role=switch]').addEventListener('click',event=>{const control=event.currentTarget;control.setAttribute('aria-checked',String(control.getAttribute('aria-checked')!=='true'))});
@@ -389,8 +409,16 @@ function createPreviewHtml({ manifest, tokens, components, patterns }) {
     for(const element of document.querySelectorAll('.magnetic')){let frame=0;element.addEventListener('pointermove',event=>{if(motion.matches||!finePointer.matches||event.pointerType==='touch')return;cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{const rect=element.getBoundingClientRect();const x=(event.clientX-rect.left-rect.width/2)/rect.width;const y=(event.clientY-rect.top-rect.height/2)/rect.height;const tilt=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--token-depth-buttonTiltMax'))||10;const strength=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--token-depth-buttonTranslation'))||.2;element.dataset.moving='true';element.style.setProperty('--magnet-x',(x*rect.width*strength)+'px');element.style.setProperty('--magnet-y',(y*rect.height*strength)+'px');element.style.setProperty('--magnet-rx',(y*tilt)+'deg');element.style.setProperty('--magnet-ry',(-x*tilt)+'deg')})});for(const type of ['pointerleave','pointercancel','blur'])element.addEventListener(type,()=>{cancelAnimationFrame(frame);resetMagnet(element)});motion.addEventListener('change',()=>resetMagnet(element))}
     for(const card of document.querySelectorAll('[data-tilt-card]')){let frame=0;function reset(){card.dataset.moving='false';for(const key of ['--card-rx','--card-ry','--card-lift'])card.style.removeProperty(key)}card.addEventListener('pointermove',event=>{if(motion.matches||!finePointer.matches||event.pointerType==='touch')return;cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{const rect=card.getBoundingClientRect();const x=(event.clientX-rect.left-rect.width/2)/rect.width;const y=(event.clientY-rect.top-rect.height/2)/rect.height;const tilt=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--token-depth-cardTiltMax')||getComputedStyle(document.documentElement).getPropertyValue('--token-depth-identityTiltMax'))||12;const lift=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--token-depth-cardLift')||getComputedStyle(document.documentElement).getPropertyValue('--token-depth-identityLiftMax'))||10;card.dataset.moving='true';card.style.setProperty('--card-rx',(y*tilt)+'deg');card.style.setProperty('--card-ry',(-x*tilt)+'deg');card.style.setProperty('--card-lift',lift+'px')})});for(const type of ['pointerleave','pointercancel'])card.addEventListener(type,()=>{cancelAnimationFrame(frame);reset()});motion.addEventListener('change',reset)}
     const overlay=document.getElementById('dialog-overlay');const open=document.getElementById('open-dialog');function closeDialog(){overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true');open.focus()}open.addEventListener('click',()=>{overlay.classList.add('open');overlay.setAttribute('aria-hidden','false');document.getElementById('close-dialog').focus()});document.getElementById('close-dialog').addEventListener('click',closeDialog);document.getElementById('cancel-dialog').addEventListener('click',closeDialog);overlay.addEventListener('click',event=>{if(event.target===overlay)closeDialog()});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&overlay.classList.contains('open'))closeDialog()});let toastTimeout;document.getElementById('show-toast').addEventListener('click',()=>{const toast=document.getElementById('toast');toast.classList.add('show');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>toast.classList.remove('show'),2200)});
-    setTheme(${safeJson(firstTheme)});
-  </script>
+     setTheme(${safeJson(firstTheme)});
+     function enhanceTypographySamples(){for(const card of document.querySelectorAll('.swatch')){const sample=card.querySelector('.token-demo[data-group="typography"] .token-demo-sample');if(!sample)continue;const name=card.querySelector('.token-label strong')?.textContent?.toLowerCase()||'';const value=card.querySelector('.token-label code')?.textContent?.trim()||'';const dimension=/^-?(?:[0-9]+|[0-9]*[.][0-9]+)(?:px|rem|em|%|vw|vh|pt|ch|ex)?$/i.test(value);const family=/(font.?family|family|technical|identity|logo|mono|sans|serif)/i.test(name)||(/(^|[.])body($|[.])/i.test(name)&&!dimension)||(!dimension&&/(^|[ ,])(sans-serif|serif|monospace|cursive|fantasy)($|[ ,])/i.test(value));sample.style.fontFamily='';sample.style.fontSize='';sample.style.fontWeight='';sample.style.lineHeight='';sample.style.letterSpacing='';if(family){sample.dataset.sampleKind='family';sample.textContent='Dise\xF1a con ritmo y claridad.';sample.style.fontFamily=value}else if(/line.?height|leading/i.test(name)){sample.dataset.sampleKind='line-height';sample.textContent='Ritmo visual \xB7 para leer mejor';sample.style.lineHeight=value}else if(/weight|bold/i.test(name)){sample.dataset.sampleKind='weight';sample.textContent='Aa Bb 600';sample.style.fontWeight=value}else if(/letter.?spacing|tracking/i.test(name)){sample.dataset.sampleKind='tracking';sample.textContent='Espaciado';sample.style.letterSpacing=value}else if(dimension&&/(size|caption|small|regular|lead|heading|display|title|body)/i.test(name)){sample.dataset.sampleKind='size';sample.textContent='Dise\xF1a';sample.style.fontSize=value}else{sample.dataset.sampleKind='generic';sample.textContent='Aa Bb 123'}}}
+     enhanceTypographySamples();new MutationObserver(enhanceTypographySamples).observe(document.getElementById('token-groups'),{childList:true,subtree:true});
+     function reviewSelection(element){const type=element.dataset.reviewSelect;if(type==='token')return{type,path:element.dataset.reviewPath,theme:element.dataset.reviewTheme};return{type,name:element.dataset.reviewName,file:element.dataset.reviewFile}}
+     function applyReviewSelectionMode(enabled){reviewSelectionMode=enabled;document.documentElement.dataset.reviewSelectMode=String(enabled);for(const element of document.querySelectorAll('[data-review-select]')){if(enabled){if(!originalReviewAttributes.has(element))originalReviewAttributes.set(element,{tabindex:element.getAttribute('tabindex'),role:element.getAttribute('role'),label:element.getAttribute('aria-label')});element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label','Seleccionar '+(element.dataset.reviewSelect==='token'?'token '+element.dataset.reviewPath+' ('+element.dataset.reviewTheme+')':(element.dataset.reviewSelect==='pattern'?'patr\xF3n ':'componente ')+element.dataset.reviewName))}else{const original=originalReviewAttributes.get(element);if(!original)continue;for(const [key,attribute] of [['tabindex','tabindex'],['role','role'],['label','aria-label']]){if(original[key]===null)element.removeAttribute(attribute);else element.setAttribute(attribute,original[key])}originalReviewAttributes.delete(element)}}}
+     function sendReviewSelection(element){const reference=reviewSelection(element);if(reference.type==='token'&&(!reference.path||!reference.theme)||reference.type!=='token'&&(!reference.name||!reference.file))return;reviewChannel?.postMessage({type:'selection',reference})}
+     window.addEventListener('message',event=>{if(event.source!==window.parent||event.data?.type!=='design-system-review-connect'||!event.ports?.[0])return;reviewChannel?.close();reviewChannel=event.ports[0];reviewChannel.onmessage=message=>{if(message.data?.type==='selection-mode')applyReviewSelectionMode(message.data.enabled===true)};reviewChannel.start()});
+     document.addEventListener('click',event=>{if(!reviewSelectionMode)return;event.preventDefault();event.stopImmediatePropagation();const target=event.target instanceof Element?event.target.closest('[data-review-select]'):null;if(target)sendReviewSelection(target)},true);
+     document.addEventListener('keydown',event=>{if(!reviewSelectionMode||!['Enter',' '].includes(event.key))return;const target=event.target instanceof Element?event.target.closest('[data-review-select]'):null;if(!target)return;event.preventDefault();event.stopImmediatePropagation();sendReviewSelection(target)},true);
+   </script>
 </body>
 </html>
 `;
@@ -408,15 +436,16 @@ function normalizeTheme(theme) {
   return { roles, missing, tokens: theme };
 }
 function firstTokenValue(theme, paths) {
-  for (const path6 of paths) {
+  for (const path7 of paths) {
     let value = theme;
-    for (const segment of path6.split(".")) value = value && typeof value === "object" ? value[segment] : void 0;
+    for (const segment of path7.split(".")) value = value && typeof value === "object" ? value[segment] : void 0;
     if ((typeof value === "string" || typeof value === "number") && String(value).trim()) return String(value);
   }
   return void 0;
 }
-function componentCard(component, index) {
+function componentCard(component, index, record) {
   const name = String(component.name ?? "Component");
+  const selectionAttributes = record?.file ? `data-review-select="component" data-review-name="${escapeHtml(name)}" data-review-file="${escapeHtml(record.file)}"` : "";
   const tokens = component.tokens ?? [];
   const evidence = [name, component.behavior, ...component.variants ?? [], ...component.states ?? [], ...tokens].filter(Boolean).join(" ");
   const isButton = /button|action/i.test(name);
@@ -432,11 +461,38 @@ function componentCard(component, index) {
   else demo = `<div class="demo-surface"><strong>${escapeHtml(name)} preview</strong><span class="muted">Static sample of the documented component.</span></div>`;
   const tokensHtml = tokens.length ? `<small>Tokens: ${tokens.map((token) => `<code>${escapeHtml(token)}</code>`).join(" ")}</small>` : "";
   return `
-    <article class="spec-card">
+    <article id="component-${index}" class="spec-card" ${selectionAttributes}>
       <div class="spec-heading"><div><p class="eyebrow">Component</p><h3>${escapeHtml(name)}</h3></div><span class="tag">${escapeHtml(component.variants?.[0] ?? "base")}</span></div>
       <p>${escapeHtml(component.purpose ?? "")}</p>
       <div class="showcase">${demo}</div>
       ${tokensHtml}
+    </article>`;
+}
+function patternCard(pattern, index, selectionAttributes) {
+  const name = String(pattern.name ?? "Pattern");
+  const evidence = `${name} ${pattern.purpose ?? ""} ${(pattern.composition ?? []).join(" ")} ${pattern.guidance ?? ""}`;
+  const composition = (pattern.composition ?? []).filter(Boolean).slice(0, 4);
+  const steps = (items) => `<div class="pattern-flow">${items.map((item, itemIndex) => `${itemIndex ? `<span class="muted" aria-hidden="true">\u2192</span>` : ""}<span class="pattern-step"><b>${itemIndex + 1}</b>${escapeHtml(item)}</span>`).join("")}</div>`;
+  let demo;
+  if (/dashboard|overview|workspace|panel/i.test(evidence)) {
+    demo = `<div class="app-stats"><div class="app-stat"><span>Open</span><strong>08</strong></div><div class="app-stat"><span>Complete</span><strong>24</strong></div></div><div class="app-chart" aria-hidden="true"><span style="--bar-height:35%"></span><span style="--bar-height:68%"></span><span style="--bar-height:50%"></span><span style="--bar-height:88%"></span><span style="--bar-height:62%"></span></div>`;
+  } else if (/marketing|landing|campaign|call.?to.?action|\bcta\b/i.test(evidence)) {
+    demo = `<div class="pattern-hero"><p class="eyebrow">A clear next step</p><h4>${escapeHtml(name)}</h4><p>${escapeHtml(pattern.purpose ?? "A focused message with one primary action.")}</p><button class="button" type="button" data-preview-action="${escapeHtml(name)}" data-feedback-target="pattern-feedback-${index}">Explore the offer</button><p class="feedback" id="pattern-feedback-${index}" role="status" aria-live="polite"></p></div>`;
+  } else if (/form|onboard|sign.?in|auth|registration/i.test(evidence)) {
+    const fieldID = `pattern-field-${index}`;
+    demo = `${steps(composition.length ? composition : ["Your details", "Review", "Done"])}<form data-preview-form><label class="field-label" for="${fieldID}">Work email<input id="${fieldID}" type="email" autocomplete="off" placeholder="name@example.com" required /></label><div class="showcase"><button class="button" type="submit">Continue</button></div><p class="feedback" role="status" aria-live="polite"></p></form>`;
+  } else if (/profile|identity|credential|account/i.test(evidence)) {
+    demo = `<div class="pattern-card-demo"><div class="pattern-avatar" aria-hidden="true">AM</div><div><strong>Alex Morgan</strong><small>Workspace administrator</small></div><span class="badge success">Verified</span></div>`;
+  } else {
+    demo = steps(composition.length ? composition : ["Content", "Supporting action", "Feedback"]);
+  }
+  const guidance = pattern.guidance && pattern.guidance !== pattern.purpose ? pattern.guidance : composition.join(" \xB7 ") || pattern.guidance || "";
+  return `
+    <article id="pattern-${index}" class="spec-card" ${selectionAttributes}>
+      <p class="eyebrow">Pattern</p><h3>${escapeHtml(name)}</h3>
+      <p>${escapeHtml(pattern.purpose ?? "")}</p>
+      <div class="pattern-demo">${demo}</div>
+      <p class="muted">${escapeHtml(guidance)}</p>
     </article>`;
 }
 function buttonDemo(name, index, magnetic) {
@@ -461,6 +517,49 @@ function safeJson(value) {
 // src/preview.ts
 function createPreviewHtml2(input) {
   return createPreviewHtml(input);
+}
+
+// templates/authored-preview.mjs
+var PREVIEW_THEME_MARKER = "<!-- opencode-design-system:theme-tokens -->";
+var REVIEW_BRIDGE = `<script id="ds-review-bridge">
+(()=>{let port,active=false;const originals=new WeakMap();
+function select(element){const type=element.dataset.reviewSelect;if(!port||!type)return;const reference=type==='token'?{type,path:element.dataset.reviewPath,theme:element.dataset.reviewTheme||document.documentElement.dataset.theme}:{type,name:element.dataset.reviewName,file:element.dataset.reviewFile};port.postMessage({type:'selection',reference})}
+function mode(enabled){active=enabled;document.documentElement.dataset.reviewSelectMode=String(enabled);for(const element of document.querySelectorAll('[data-review-select]')){if(enabled){if(!originals.has(element))originals.set(element,[element.getAttribute('tabindex'),element.getAttribute('role'),element.getAttribute('aria-label')]);element.setAttribute('tabindex','0');element.setAttribute('role','button');element.setAttribute('aria-label','Seleccionar '+(element.dataset.reviewName||element.dataset.reviewPath||'elemento'))}else{const old=originals.get(element);if(!old)continue;for(const [key,value] of [['tabindex',old[0]],['role',old[1]],['aria-label',old[2]]]){if(value===null)element.removeAttribute(key);else element.setAttribute(key,value)}originals.delete(element)}}}
+window.addEventListener('message',event=>{if(event.source!==window.parent||event.data?.type!=='design-system-review-connect'||!event.ports?.[0])return;port?.close();port=event.ports[0];port.onmessage=message=>{if(message.data?.type==='selection-mode')mode(message.data.enabled===true)};port.start()});
+document.addEventListener('click',event=>{if(!active)return;event.preventDefault();event.stopImmediatePropagation();const target=event.target instanceof Element?event.target.closest('[data-review-select]'):null;if(target)select(target)},true);
+document.addEventListener('keydown',event=>{if(!active||!['Enter',' '].includes(event.key))return;const target=event.target instanceof Element?event.target.closest('[data-review-select]'):null;if(!target)return;event.preventDefault();event.stopImmediatePropagation();select(target)},true);
+})();
+</script>`;
+function renderAuthoredPreview(source, tokens) {
+  if (typeof source !== "string" || source.length > 4e5 || !/<html\b/i.test(source) || !/<head\b/i.test(source) || !/<\/head\s*>/i.test(source) || !/<body\b/i.test(source) || !/<\/body\s*>/i.test(source)) {
+    throw new Error("Preview source must be a complete HTML document under 400 KB.");
+  }
+  if (source.split(PREVIEW_THEME_MARKER).length !== 2 || source.indexOf(PREVIEW_THEME_MARKER) > source.search(/<\/head\s*>/i)) {
+    throw new Error(`Place ${PREVIEW_THEME_MARKER} exactly once inside <head> in preview/source.html.`);
+  }
+  const themes = tokens?.themes;
+  if (!themes || typeof themes !== "object" || Array.isArray(themes) || !Object.keys(themes).length) {
+    throw new Error("tokens.json needs at least one theme to compile an authored preview.");
+  }
+  const css = Object.entries(themes).map(([name, theme], index) => {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name) || !theme || typeof theme !== "object" || Array.isArray(theme)) {
+      throw new Error(`Invalid preview theme: ${name}`);
+    }
+    const declarations = flatten(theme).map(([key, value]) => {
+      if (!/^[a-zA-Z0-9_-]+$/.test(key) || !/^[^;{}<>\\\r\n]+$/.test(value)) throw new Error(`Invalid preview token value: ${key}`);
+      return `--ds-${key}:${value};`;
+    }).join("");
+    return `${index === 0 ? ":root," : ""}:root[data-theme="${name}"]{${declarations}}`;
+  }).join("\n");
+  return source.replace(PREVIEW_THEME_MARKER, `<style id="ds-preview-tokens">${css}</style>`).replace(/<\/body\s*>/i, `${REVIEW_BRIDGE}</body>`);
+}
+function flatten(value, prefix = "") {
+  return Object.entries(value).flatMap(([key, entry]) => {
+    const name = prefix ? `${prefix}-${key}` : key;
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) return flatten(entry, name);
+    if (typeof entry !== "string" && typeof entry !== "number") throw new Error(`Unsupported preview token: ${name}`);
+    return [[name, String(entry)]];
+  });
 }
 
 // src/generator.ts
@@ -548,8 +647,11 @@ async function createDesignSystem(root, input) {
     ["README.md", systemReadme(manifest)],
     ["tools/generate-preview.mjs", await readFile2(new URL("../templates/generate-preview.mjs", import.meta.url), "utf8")],
     ["tools/preview-renderer.mjs", await readFile2(new URL("../templates/preview-renderer.mjs", import.meta.url), "utf8")],
-    ["preview/index.html", createPreviewHtml2({ manifest, tokens, components, patterns })]
+    ["tools/authored-preview.mjs", await readFile2(new URL("../templates/authored-preview.mjs", import.meta.url), "utf8")],
+    ["tools/render-authored-preview.mjs", await readFile2(new URL("../templates/render-authored-preview.mjs", import.meta.url), "utf8")],
+    ["preview/index.html", input.previewSource ? renderAuthoredPreview(input.previewSource, tokens) : createPreviewHtml2({ manifest, tokens, components, patterns })]
   ]);
+  if (input.previewSource) files.set("preview/source.html", input.previewSource);
   for (const [index, component] of components.entries()) files.set(manifest.components[index].file, componentMarkdown(component));
   for (const [index, pattern] of patterns.entries()) files.set(manifest.patterns[index].file, patternMarkdown(pattern));
   const generatedFilePaths = new Set(files.keys());
@@ -588,11 +690,36 @@ async function createDesignSystem(root, input) {
 async function regeneratePreview(root) {
   const manifest = await readManifest(root);
   const tokens = await readJson(root, `${DESIGN_SYSTEM_DIR}/${manifest.tokens}`);
+  const sourcePath = `${DESIGN_SYSTEM_DIR}/preview/source.html`;
+  if (await fileExists(root, sourcePath)) {
+    const source = await readText2(root, sourcePath);
+    const html2 = renderAuthoredPreview(source, tokens);
+    await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, html2);
+    return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: manifest.components.length, patternCount: manifest.patterns.length, mode: "authored" };
+  }
   const components = await Promise.all(manifest.components.map(async (item) => parseComponent(item.name, await readText2(root, `${DESIGN_SYSTEM_DIR}/${item.file}`), item.tokens)));
   const patterns = await Promise.all(manifest.patterns.map(async (item) => parsePattern(item.name, await readText2(root, `${DESIGN_SYSTEM_DIR}/${item.file}`), item.tokens)));
   const html = createPreviewHtml2({ manifest, tokens, components, patterns });
   await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, html);
-  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: components.length, patternCount: patterns.length };
+  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: components.length, patternCount: patterns.length, mode: "provisional" };
+}
+async function authorPreview(root, source) {
+  const manifest = await readManifest(root);
+  const tokens = await readJson(root, `${DESIGN_SYSTEM_DIR}/${manifest.tokens}`);
+  const compiled = renderAuthoredPreview(source, tokens);
+  const sourcePath = `${DESIGN_SYSTEM_DIR}/preview/source.html`;
+  if (await fileExists(root, sourcePath)) throw new Error(`${sourcePath} already exists. Read and edit it deliberately, then call design_system_preview without source.`);
+  for (const file of ["authored-preview.mjs", "render-authored-preview.mjs"]) {
+    const destination = `${DESIGN_SYSTEM_DIR}/tools/${file}`;
+    if (!await fileExists(root, destination)) {
+      await writeFile2(resolveInside(root, destination), await readFile2(new URL(`../templates/${file}`, import.meta.url), "utf8"), { flag: "wx" }).catch((error) => {
+        if (error.code !== "EEXIST") throw error;
+      });
+    }
+  }
+  await writeFile2(resolveInside(root, sourcePath), source, { flag: "wx" });
+  await atomicWrite(root, `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, compiled);
+  return { preview: `${DESIGN_SYSTEM_DIR}/${manifest.preview}`, componentCount: manifest.components.length, patternCount: manifest.patterns.length, mode: "authored" };
 }
 async function readManifest(root) {
   return readJson(root, `${DESIGN_SYSTEM_DIR}/manifest.json`);
@@ -626,6 +753,7 @@ function validateCreateInput(input) {
   if (!input.name?.trim()) throw new Error("name is required");
   if (!input.description?.trim()) throw new Error("description is required");
   if (!input.foundations?.trim()) throw new Error("foundations must contain the agreed design foundations");
+  if (input.previewSource !== void 0 && !input.previewSource.trim()) throw new Error("previewSource must contain a complete authored HTML document");
   const tokenErrors = validateTokens(input.tokens);
   if (tokenErrors.length) throw new Error(tokenErrors.join("; "));
   if (input.preferences && input.preferences.some((item) => !item.key || item.value === void 0)) throw new Error("Each preference requires a key and value");
@@ -693,7 +821,7 @@ ${manifest.description}
 
 Start with [manifest.json](manifest.json), which indexes the [semantic tokens](tokens.json), [foundations](FOUNDATIONS.md), [AI guidelines](AI-GUIDELINES.md), [preferences](preferences.json), [decisions](DECISIONS.md), component and pattern documentation, and the generated [interactive preview](preview/index.html).
 
-The definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview.
+The definition is framework-neutral. The HTML is a generated view, not an independent design specification. Update structured files and regenerate the preview. An agent can create a project-specific [preview/source.html](preview/source.html); its CSS uses \`var(--ds-color-accent)\` and other semantic token variables, with \`<!-- opencode-design-system:theme-tokens -->\` inside <head>. It is a showcase, not the design specification. The HTML output is regenerated without replacing its source.
 
 ## Progressive loading
 
@@ -701,7 +829,7 @@ Read the manifest and AI guidelines first. Load only task-relevant component and
 
 ## Plugin-independent maintenance
 
-This project includes [tools/generate-preview.mjs](tools/generate-preview.mjs), a dependency-free Node.js renderer. After editing structured tokens/specifications without the plugin, run node design-system/tools/generate-preview.mjs from the project root. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system; no project-local plugin agents, commands, or skills are required.
+Run node design-system/tools/generate-preview.mjs from the project root to regenerate the preview from structured tokens and, if present, the authored source. For older installations with an existing generator, use node design-system/tools/render-authored-preview.mjs after adding preview/source.html. The project's [AGENTS.md](../AGENTS.md) block points any coding agent to the portable system.
 `;
 }
 function pretty(value) {
@@ -1292,18 +1420,592 @@ function bumpVersion(version, impact) {
   return `${major}.${minor}.${patch}`;
 }
 
+// src/review.ts
+import { randomBytes } from "crypto";
+import { spawn } from "child_process";
+import { createServer } from "http";
+import { readFile as readFile4 } from "fs/promises";
+var MAX_PROMPT_LENGTH = 2e4;
+var MAX_BODY_LENGTH = 128 * 1024;
+function createReviewService(input) {
+  const { projectRoot, context, autoOpen } = input;
+  const previewRoot = resolveInside(projectRoot, DESIGN_SYSTEM_DIR);
+  const tokenToSession = /* @__PURE__ */ new Map();
+  const sessionToToken = /* @__PURE__ */ new Map();
+  const statusBySession = /* @__PURE__ */ new Map();
+  const clients = /* @__PURE__ */ new Set();
+  const eventController = new AbortController();
+  let server;
+  let serverStart;
+  let closed = false;
+  let sawServerConnected = false;
+  const broadcast = (sessionID, event, data = {}) => {
+    const message = `event: ${event}
+data: ${JSON.stringify(data)}
+
+`;
+    for (const client of clients) {
+      if (client.sessionID === sessionID && !client.response.destroyed) client.response.write(message);
+    }
+  };
+  const ensureEventListener = () => {
+    void (async () => {
+      while (!eventController.signal.aborted) {
+        try {
+          for await (const event of context.event.subscribe({ signal: eventController.signal })) {
+            if (!event || typeof event !== "object") continue;
+            const typedEvent = event;
+            if (typedEvent.type === "server.connected") {
+              if (sawServerConnected) {
+                for (const sessionID2 of sessionToToken.keys()) {
+                  statusBySession.set(sessionID2, "idle");
+                  broadcast(sessionID2, "sync", { status: "idle" });
+                  try {
+                    const preview = await regeneratePreview(projectRoot);
+                    broadcast(sessionID2, "preview", { preview: preview.preview });
+                  } catch {
+                    broadcast(sessionID2, "review-error", { message: "No se pudo actualizar la preview tras reconectar con OpenCode." });
+                  }
+                }
+              }
+              sawServerConnected = true;
+              continue;
+            }
+            const sessionID = typedEvent.data?.sessionID;
+            if (!sessionID || !sessionToToken.has(sessionID)) continue;
+            if (typedEvent.type === "session.status") {
+              statusBySession.set(sessionID, typedEvent.data?.status?.type === "idle" ? "idle" : "working");
+            } else if (typedEvent.type === "session.execution.started") {
+              statusBySession.set(sessionID, "working");
+            } else if (["session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle"].includes(typedEvent.type ?? "")) {
+              statusBySession.set(sessionID, "idle");
+            }
+            broadcast(sessionID, "update", { type: typedEvent.type, status: statusBySession.get(sessionID) ?? "idle" });
+            const sessionFinished = [
+              "session.execution.succeeded",
+              "session.execution.failed",
+              "session.execution.interrupted",
+              "session.idle"
+            ].includes(typedEvent.type ?? "");
+            const reportedIdle = typedEvent.type === "session.status" && typedEvent.data?.status?.type === "idle";
+            if (sessionFinished || reportedIdle) {
+              try {
+                const preview = await regeneratePreview(projectRoot);
+                broadcast(sessionID, "preview", { preview: preview.preview });
+              } catch {
+                broadcast(sessionID, "review-error", { message: "No se pudo actualizar la preview autom\xE1ticamente. Puedes intentarlo con el bot\xF3n de actualizar." });
+              }
+            }
+          }
+        } catch {
+          if (eventController.signal.aborted) return;
+        }
+        if (eventController.signal.aborted) return;
+        await waitForRetry(eventController.signal);
+      }
+    })();
+  };
+  const handleRequest = async (request, response, port) => {
+    setBaseHeaders(response);
+    const expectedHost = `127.0.0.1:${port}`;
+    if (request.headers.host !== expectedHost) {
+      writeText(response, 403, "Forbidden");
+      return;
+    }
+    const url = new URL(request.url ?? "/", `http://${expectedHost}`);
+    if (request.method === "GET" && url.pathname.startsWith("/open/")) {
+      const token = url.pathname.slice("/open/".length);
+      if (!/^[a-f0-9]{48}$/.test(token) || !tokenToSession.has(token)) {
+        writeText(response, 404, "This review link is no longer available.");
+        return;
+      }
+      response.writeHead(303, {
+        "Cache-Control": "no-store",
+        "Location": "/",
+        "Set-Cookie": `ds_review=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`
+      });
+      response.end();
+      return;
+    }
+    const sessionID = authorizedSession(request, tokenToSession);
+    if (!sessionID) {
+      writeText(response, 401, "Open the review link from the OpenCode conversation.");
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/") {
+      const page = renderReviewPage();
+      writeHtml(response, page.html, `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${page.nonce}'; connect-src 'self'; frame-src 'self'; img-src data:; form-action 'self'; base-uri 'none'; object-src 'none'`);
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/preview") {
+      try {
+        const manifest = await readManifest(projectRoot);
+        const previewPath = resolveInside(previewRoot, manifest.preview);
+        const html = await readFile4(previewPath, "utf8");
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'",
+          "Content-Type": "text/html; charset=utf-8"
+        });
+        response.end(html);
+      } catch {
+        writeJson(response, 404, { error: "The generated preview is not available. Regenerate it and try again." });
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/messages") {
+      try {
+        const contextMessages = await context.session.context({ sessionID });
+        const messages = normalizeMessages(contextMessages);
+        const latest = Array.isArray(contextMessages) ? contextMessages.at(-1) : void 0;
+        const inferredStatus = latest?.type === "assistant" && latest.time?.completed === void 0 ? "working" : "idle";
+        writeJson(response, 200, {
+          sessionID,
+          status: statusBySession.get(sessionID) ?? inferredStatus,
+          messages
+        });
+      } catch {
+        writeJson(response, 502, { error: "No se pudo leer la conversaci\xF3n de OpenCode." });
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/events") {
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Connection": "keep-alive",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "X-Accel-Buffering": "no"
+      });
+      response.write(": connected\n\n");
+      const client = {
+        sessionID,
+        response,
+        heartbeat: setInterval(() => {
+          if (!response.destroyed) response.write(": keep-alive\n\n");
+        }, 2e4)
+      };
+      client.heartbeat.unref();
+      clients.add(client);
+      response.on("close", () => {
+        clearInterval(client.heartbeat);
+        clients.delete(client);
+      });
+      return;
+    }
+    if (request.method === "POST" && ["/api/prompt", "/api/preview", "/api/reference"].includes(url.pathname)) {
+      if (request.headers.origin !== `http://${expectedHost}` || request.headers["sec-fetch-site"] === "cross-site") {
+        writeText(response, 403, "Cross-origin request denied");
+        return;
+      }
+      if (url.pathname === "/api/prompt") {
+        try {
+          const payload = JSON.parse(await readRequestBody(request));
+          const text = typeof payload.text === "string" ? payload.text.trim() : "";
+          const delivery = payload.delivery === "queue" ? "queue" : "steer";
+          if (!text || text.length > MAX_PROMPT_LENGTH) {
+            writeJson(response, 400, { error: `Escribe un mensaje de hasta ${MAX_PROMPT_LENGTH.toLocaleString("es-ES")} caracteres.` });
+            return;
+          }
+          const rawReferences = payload.references === void 0 ? [] : payload.references;
+          if (!Array.isArray(rawReferences) || rawReferences.length > 8) {
+            writeJson(response, 400, { error: "Puedes adjuntar hasta 8 elementos seleccionados de la preview." });
+            return;
+          }
+          let references = [];
+          if (rawReferences.length) {
+            const catalog = await loadReviewCatalog(projectRoot);
+            const resolved = await Promise.all(rawReferences.map((reference) => resolveReviewReference(catalog, reference)));
+            const staleReferences = rawReferences.filter((_, index) => !resolved[index]);
+            if (staleReferences.length) {
+              writeJson(response, 409, {
+                error: "Una o m\xE1s referencias ya no existen en el Design System actual. Elim\xEDnalas o selecciona de nuevo los elementos antes de enviar.",
+                staleReferences
+              });
+              return;
+            }
+            references = resolved;
+          }
+          const promptText = references.length ? promptWithReferences(text, references) : text;
+          await context.session.prompt({ sessionID, text: promptText, delivery });
+          writeJson(response, 202, { accepted: true, references });
+        } catch (error) {
+          const tooLarge = error instanceof RequestSizeError;
+          writeJson(response, tooLarge ? 413 : 400, { error: tooLarge ? "El mensaje supera el tama\xF1o permitido." : errorMessage(error) });
+        }
+        return;
+      }
+      if (url.pathname === "/api/reference") {
+        try {
+          const payload = JSON.parse(await readRequestBody(request));
+          const catalog = await loadReviewCatalog(projectRoot);
+          const reference = await resolveReviewReference(catalog, payload.reference);
+          if (!reference) {
+            writeJson(response, 409, { error: "El elemento seleccionado ya no est\xE1 disponible. Actualiza la preview y selecci\xF3nalo de nuevo." });
+            return;
+          }
+          writeJson(response, 200, { reference });
+        } catch (error) {
+          const tooLarge = error instanceof RequestSizeError;
+          writeJson(response, tooLarge ? 413 : 400, { error: tooLarge ? "La referencia supera el tama\xF1o permitido." : errorMessage(error) });
+        }
+        return;
+      }
+      try {
+        const result = await regeneratePreview(projectRoot);
+        broadcast(sessionID, "preview", { preview: result.preview });
+        writeJson(response, 200, result);
+      } catch {
+        writeJson(response, 500, { error: "No se pudo regenerar la preview. Revisa los archivos del Design System." });
+      }
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/api/status") {
+      writeJson(response, 200, { status: statusBySession.get(sessionID) ?? "idle" });
+      return;
+    }
+    writeText(response, 404, "Not found");
+  };
+  const ensureServer = async () => {
+    if (closed) throw new Error("La vista de revisi\xF3n ya est\xE1 cerrada.");
+    if (serverStart) return serverStart;
+    server = createServer((request, response) => {
+      void handleRequest(request, response, serverPort).catch(() => {
+        if (!response.headersSent) writeJson(response, 500, { error: "Error interno de la vista de revisi\xF3n." });
+        else response.end();
+      });
+    });
+    serverStart = new Promise((resolve, reject) => {
+      const currentServer = server;
+      const onError = (error) => reject(error);
+      currentServer.once("error", onError);
+      currentServer.listen(0, "127.0.0.1", () => {
+        currentServer.off("error", onError);
+        const address = currentServer.address();
+        if (!address || typeof address === "string") {
+          reject(new Error("No se pudo obtener el puerto de la vista de revisi\xF3n."));
+          return;
+        }
+        serverPort = address.port;
+        resolve(serverPort);
+      });
+    });
+    const port = await serverStart;
+    ensureEventListener();
+    return port;
+  };
+  let serverPort = 0;
+  return {
+    async open(sessionID) {
+      await regeneratePreview(projectRoot);
+      const port = await ensureServer();
+      if (closed) throw new Error("La vista de revisi\xF3n ya est\xE1 cerrada.");
+      const previousToken = sessionToToken.get(sessionID);
+      if (previousToken) {
+        tokenToSession.delete(previousToken);
+        closeSessionClients(sessionID, clients);
+      }
+      const token = randomBytes(24).toString("hex");
+      sessionToToken.set(sessionID, token);
+      tokenToSession.set(token, sessionID);
+      statusBySession.set(sessionID, "idle");
+      const url = `http://127.0.0.1:${port}/open/${token}`;
+      if (!autoOpen) return { url, browserOpened: false };
+      try {
+        await launchBrowser(url);
+        return { url, browserOpened: true };
+      } catch (error) {
+        return { url, browserOpened: false, browserError: errorMessage(error) };
+      }
+    },
+    async close() {
+      if (closed) return;
+      closed = true;
+      eventController.abort();
+      for (const client of clients) {
+        clearInterval(client.heartbeat);
+        client.response.end();
+      }
+      clients.clear();
+      tokenToSession.clear();
+      sessionToToken.clear();
+      if (serverStart) await serverStart.catch(() => void 0);
+      if (!server?.listening) return;
+      await new Promise((resolve) => server.close(() => resolve()));
+    }
+  };
+}
+function closeSessionClients(sessionID, clients) {
+  for (const client of clients) {
+    if (client.sessionID !== sessionID) continue;
+    clearInterval(client.heartbeat);
+    client.response.end();
+    clients.delete(client);
+  }
+}
+function setBaseHeaders(response) {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+}
+function authorizedSession(request, tokenToSession) {
+  const cookie = request.headers.cookie?.split(";").map((item) => item.trim()).find((item) => item.startsWith("ds_review="));
+  const token = cookie?.slice("ds_review=".length);
+  return token ? tokenToSession.get(token) : void 0;
+}
+function writeJson(response, status, data) {
+  response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(data));
+}
+function writeText(response, status, text) {
+  response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" });
+  response.end(text);
+}
+function writeHtml(response, html, policy) {
+  response.writeHead(200, {
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": policy,
+    "Content-Type": "text/html; charset=utf-8"
+  });
+  response.end(html);
+}
+function normalizeMessages(input) {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    if (item.type === "user") return [{ id: String(item.id ?? randomBytes(6).toString("hex")), role: "user", text: clampText(item.text), created: item.time?.created }];
+    if (item.type === "synthetic") return [{ id: String(item.id ?? randomBytes(6).toString("hex")), role: "system", text: clampText(item.text), created: item.time?.created }];
+    if (item.type !== "assistant") return [];
+    const parts = Array.isArray(item.content) ? item.content : [];
+    const text = parts.filter((part) => part?.type === "text" && typeof part.text === "string").map((part) => part.text).join("\n\n");
+    const tools = parts.filter((part) => part?.type === "tool").map((part) => {
+      const status = part.state?.status;
+      return status === "error" ? `Herramienta ${part.tool ?? ""}: error` : `Herramienta: ${part.tool ?? "ejecutada"}`;
+    });
+    const content = [text, ...tools].filter(Boolean).join("\n\n");
+    return content ? [{ id: String(item.id ?? randomBytes(6).toString("hex")), role: "assistant", text: clampText(content), created: item.time?.created }] : [];
+  }).slice(-100);
+}
+async function loadReviewCatalog(projectRoot) {
+  const manifest = await readManifest(projectRoot);
+  const designSystemRoot = resolveInside(projectRoot, DESIGN_SYSTEM_DIR);
+  const tokenPath = resolveInside(designSystemRoot, manifest.tokens);
+  const tokens = JSON.parse(await readFile4(tokenPath, "utf8"));
+  return { manifest, tokens, designSystemRoot };
+}
+async function resolveReviewReference(catalog, input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return void 0;
+  const reference = input;
+  if (reference.type === "component" || reference.type === "pattern") {
+    if (typeof reference.name !== "string" || typeof reference.file !== "string" || reference.name.length > 256 || reference.file.length > 512) return void 0;
+    const records = reference.type === "component" ? catalog.manifest.components : catalog.manifest.patterns;
+    const record = records.find((item) => item.name === reference.name && item.file === reference.file);
+    if (!record) return void 0;
+    try {
+      await readFile4(resolveInside(catalog.designSystemRoot, record.file), "utf8");
+    } catch {
+      return void 0;
+    }
+    return { type: reference.type, name: record.name, file: record.file, tokens: [...record.tokens] };
+  }
+  if (reference.type === "token") {
+    if (typeof reference.path !== "string" || typeof reference.theme !== "string" || reference.path.length > 512 || reference.theme.length > 128 || !catalog.manifest.themes.includes(reference.theme)) return void 0;
+    const pathParts = reference.path.split(".");
+    if (!pathParts.length || pathParts.some((part) => !part || part.trim() !== part)) return void 0;
+    const themes = catalog.tokens.themes;
+    let value = themes && typeof themes === "object" ? themes[reference.theme] : void 0;
+    for (const part of pathParts) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+      value = value[part];
+    }
+    if (!["string", "number", "boolean"].includes(typeof value)) return void 0;
+    return { type: "token", path: reference.path, theme: reference.theme, file: catalog.manifest.tokens, value: String(value) };
+  }
+  return void 0;
+}
+function promptWithReferences(text, references) {
+  return `${text}
+
+The user selected these exact elements in the interactive Design System preview. Treat this JSON as stable reference data, read the listed source documents before editing, and do not edit generated preview HTML:
+
+${JSON.stringify(references, null, 2)}
+
+Keep the requested change focused on these selected elements.`;
+}
+function clampText(value) {
+  if (typeof value !== "string") return "";
+  return value.length > 16e3 ? `${value.slice(0, 16e3)}
+
+[Mensaje truncado en la vista de revisi\xF3n]` : value;
+}
+function readRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let oversized = false;
+    request.on("data", (chunk) => {
+      if (oversized) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > MAX_BODY_LENGTH) {
+        oversized = true;
+        reject(new RequestSizeError());
+        return;
+      }
+      chunks.push(buffer);
+    });
+    request.on("end", () => {
+      if (!oversized) resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    request.on("error", reject);
+  });
+}
+var RequestSizeError = class extends Error {
+};
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function waitForRetry(signal) {
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, 1e3);
+    timer.unref();
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
+function launchBrowser(url) {
+  const command = process.platform === "win32" ? "cmd.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { detached: true, stdio: "ignore", windowsHide: true });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+    });
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`El navegador del sistema termin\xF3 con el c\xF3digo ${code ?? "desconocido"}.`));
+    });
+    const timeout = setTimeout(() => reject(new Error("El navegador del sistema no respondi\xF3 a tiempo.")), 5e3);
+    timeout.unref();
+    child.once("exit", () => clearTimeout(timeout));
+    child.once("error", () => clearTimeout(timeout));
+  });
+}
+function renderReviewPage() {
+  const nonce = randomBytes(18).toString("base64url");
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Design System Review \xB7 OpenCode</title>
+<style>
+:root{color-scheme:dark;--bg:#111315;--panel:#191c1f;--surface:#202428;--line:#30363b;--text:#edf0f2;--muted:#9ba4aa;--accent:#b6d8c6;--accent-ink:#17241d;--danger:#f3a7a2;font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}.app{height:100vh;display:grid;grid-template-rows:56px minmax(0,1fr)}header{display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--line);background:#151719}.brand{display:flex;align-items:center;gap:11px;font-weight:650}.mark{width:25px;height:25px;display:grid;place-items:center;border:1px solid #496352;border-radius:8px;color:var(--accent);font-size:13px}.subtitle{color:var(--muted);font-size:12px;font-weight:450}.header-right{display:flex;align-items:center;gap:12px}.state{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.dot{width:7px;height:7px;border-radius:50%;background:#75c796}.state.working .dot{background:#e6bd76;box-shadow:0 0 0 4px #e6bd7622;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.45}}main{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 390px}.preview-pane,.chat-pane{min-width:0;min-height:0;display:grid;grid-template-rows:49px minmax(0,1fr)}.preview-pane{border-right:1px solid var(--line)}.pane-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line);background:#17191b}.pane-title{font-size:12px;font-weight:650;letter-spacing:.02em}.tools{display:flex;align-items:center;gap:8px}.button{border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--text);padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}.button:hover{border-color:#64736c}.button:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:650}.button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}.button:disabled{opacity:.5;cursor:wait}.frame-wrap{min-height:0;background:#e9e7e3}.frame-wrap iframe{display:block;width:100%;height:100%;border:0;background:white}.chat-pane{grid-template-rows:49px minmax(0,1fr) auto}.chat-heading{display:flex;align-items:center;justify-content:space-between}.session-label{color:var(--muted);font-size:11px;max-width:116px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.messages{min-height:0;overflow:auto;padding:18px 15px 24px;display:flex;flex-direction:column;gap:13px;scrollbar-color:#3b4146 transparent}.empty{margin:auto 8px;color:var(--muted);text-align:center;max-width:260px}.message{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:10px 11px;max-width:100%}.message.user{background:#202821;border-color:#35483c}.message.system{background:#1c2022;color:#bac3c8}.message-meta{font-size:10px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em}.message-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}.composer{border-top:1px solid var(--line);padding:12px;background:#151719}.composer textarea{resize:vertical;min-height:86px;max-height:220px;width:100%;border:1px solid var(--line);border-radius:8px;background:#101214;color:var(--text);padding:10px;font:inherit;line-height:1.45}.selected-references{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.selected-references:empty{display:none}.reference-chip{display:flex;align-items:center;gap:8px;max-width:100%;border:1px solid #3c5145;border-radius:7px;background:#1c2821;padding:6px 7px 6px 9px}.reference-chip.stale{border-color:#694640;background:#2b201f}.reference-copy{display:grid;min-width:0;gap:1px}.reference-copy strong{font-size:11px;font-weight:600}.reference-copy span{color:var(--muted);font-size:10px;overflow-wrap:anywhere}.reference-remove{flex:none;border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:2px 4px}.reference-remove:hover{color:var(--text)}.selection-help{color:var(--accent);font-size:10px;margin-top:6px}.selection-help[hidden]{display:none}.composer-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}.composer-hint{font-size:10px;color:var(--muted)}.composer-actions{display:flex;align-items:center;gap:8px}.composer select{max-width:100px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--muted);padding:6px 7px;font:inherit;font-size:11px}.notice{position:fixed;left:50%;top:68px;transform:translateX(-50%);max-width:min(90vw,600px);padding:9px 13px;border:1px solid #59423f;border-radius:8px;background:#2a201f;color:var(--danger);box-shadow:0 8px 28px #0008;font-size:12px;z-index:3}.notice[hidden]{display:none}@media(max-width:900px){body{height:auto;min-height:100vh;overflow:auto}.app{height:auto;min-height:100vh;grid-template-rows:56px 1fr}main{grid-template-columns:1fr;grid-template-rows:minmax(55vh,1fr) minmax(480px,70vh)}.preview-pane{border-right:0;border-bottom:1px solid var(--line)}.chat-pane{min-height:0}}@media(max-width:520px){header{padding:0 11px}.subtitle{display:none}.header-right .state{font-size:0}.header-right .state .dot{width:8px;height:8px}.pane-toolbar{padding:0 10px}.button{padding:6px 8px}.chat-pane{grid-template-rows:45px minmax(0,1fr) auto}.composer-hint{display:none}}
+</style>
+</head>
+<body><div class="app">
+<header><div class="brand"><span class="mark">\u25C8</span><span>Design System Review</span><span class="subtitle">\xB7 OpenCode v2</span></div><div class="header-right"><span class="state" id="connection-state"><i class="dot"></i><span id="state-label">Conectando\u2026</span></span></div></header>
+<main><section class="preview-pane" aria-label="Vista previa"><div class="pane-toolbar"><span class="pane-title">PREVIEW</span><div class="tools"><button class="button" id="select-mode" type="button" aria-pressed="false">Seleccionar elemento</button><button class="button" id="refresh-preview" type="button">Actualizar preview</button></div></div><div class="frame-wrap"><iframe id="preview" title="Vista previa interactiva del Design System" sandbox="allow-scripts allow-forms"></iframe></div></section>
+<section class="chat-pane" aria-label="Conversaci\xF3n de OpenCode"><div class="pane-toolbar chat-heading"><span class="pane-title">CONVERSACI\xD3N</span><span class="session-label" id="session-label" title="">Sesi\xF3n</span></div><div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div><form class="composer" id="composer"><textarea id="prompt" maxlength="20000" placeholder="Pide un cambio en el Design System\u2026" aria-label="Mensaje para OpenCode"></textarea><div class="selected-references" id="selected-references" aria-live="polite"></div><div class="selection-help" id="selection-help" hidden>Elige componentes, patrones o tokens en la preview. Puedes adjuntar hasta 8.</div><div class="composer-row"><span class="composer-hint">Intro para enviar \xB7 May\xFAs+Intro para nueva l\xEDnea</span><div class="composer-actions"><select id="delivery" aria-label="Modo de env\xEDo"><option value="steer">Dirigir</option><option value="queue">En cola</option></select><button class="button primary" id="send" type="submit">Enviar</button></div></div></form></section></main><div class="notice" id="notice" role="status" hidden></div></div>
+<script nonce="${nonce}">
+const messages=document.getElementById('messages'),frame=document.getElementById('preview'),state=document.getElementById('connection-state'),stateLabel=document.getElementById('state-label'),sessionLabel=document.getElementById('session-label'),notice=document.getElementById('notice'),form=document.getElementById('composer'),promptInput=document.getElementById('prompt'),sendButton=document.getElementById('send'),selectModeButton=document.getElementById('select-mode'),selectionHelp=document.getElementById('selection-help'),referenceHolder=document.getElementById('selected-references');let noticeTimer,messageRefreshTimer,selectionMode=false,selectionPort=null;const selectedReferences=[];
+function showNotice(text){notice.textContent=text;notice.hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>notice.hidden=true,6500)}
+function setStatus(value){const working=value==='working';state.classList.toggle('working',working);stateLabel.textContent=working?'OpenCode est\xE1 trabajando':'Sesi\xF3n conectada'}
+function refreshPreview(){frame.src='/preview?refresh='+Date.now()}
+function nearBottom(){return messages.scrollHeight-messages.scrollTop-messages.clientHeight<90}
+function addMessage(item){const article=document.createElement('article');article.className='message '+item.role;const meta=document.createElement('div');meta.className='message-meta';meta.textContent=item.role==='user'?'T\xFA':item.role==='assistant'?'OpenCode':'Sistema';const body=document.createElement('div');body.className='message-body';body.textContent=item.text;article.append(meta,body);messages.append(article)}
+async function loadMessages(){const keepBottom=nearBottom();try{const response=await fetch('/api/messages',{cache:'no-store'});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'No se pudo cargar la conversaci\xF3n.');messages.replaceChildren();if(!payload.messages.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='La conversaci\xF3n aparecer\xE1 aqu\xED. Puedes pedir cambios y seguir trabajando en OpenCode.';messages.append(empty)}else payload.messages.forEach(addMessage);sessionLabel.textContent='Sesi\xF3n '+String(payload.sessionID).slice(0,10);sessionLabel.title=payload.sessionID;setStatus(payload.status);if(keepBottom)messages.scrollTop=messages.scrollHeight}catch(error){showNotice(error.message||'No se pudo conectar con OpenCode.')}}
+function referenceKey(reference){return reference.type==='token'?'token:'+reference.theme+':'+reference.path:reference.type+':'+reference.file}
+function referenceTitle(reference){if(reference.type==='token')return 'Token \xB7 '+reference.path;return (reference.type==='pattern'?'Patr\xF3n \xB7 ':'Componente \xB7 ')+reference.name}
+function referenceDetail(reference){if(reference.type==='token')return reference.theme+' \xB7 '+reference.value;return 'design-system/'+reference.file+(reference.tokens&&reference.tokens.length?' \xB7 '+reference.tokens.join(', '):'')}
+function renderReferences(){referenceHolder.replaceChildren();for(const item of selectedReferences){const chip=document.createElement('div');chip.className='reference-chip'+(item.stale?' stale':'');const copy=document.createElement('div');copy.className='reference-copy';const title=document.createElement('strong');title.textContent=referenceTitle(item.reference)+(item.stale?' \xB7 obsoleto':'');const detail=document.createElement('span');detail.textContent=referenceDetail(item.reference);const remove=document.createElement('button');remove.className='reference-remove';remove.type='button';remove.textContent='\xD7';remove.setAttribute('aria-label','Quitar '+referenceTitle(item.reference));remove.addEventListener('click',()=>{const index=selectedReferences.indexOf(item);if(index>=0)selectedReferences.splice(index,1);renderReferences()});copy.append(title,detail);chip.append(copy,remove);referenceHolder.append(chip)}selectionHelp.hidden=!selectionMode}
+function setSelectionMode(enabled){selectionMode=enabled;selectModeButton.setAttribute('aria-pressed',String(enabled));selectModeButton.textContent=enabled?'Cancelar selecci\xF3n':'Seleccionar elemento';selectionHelp.hidden=!enabled;if(selectionPort)selectionPort.postMessage({type:'selection-mode',enabled});if(enabled)showNotice('Selecciona componentes, patrones o muestras de tokens en la preview.')}
+function connectPreview(){if(selectionPort)selectionPort.close();selectionPort=null;if(typeof MessageChannel==='undefined'||!frame.contentWindow)return;const channel=new MessageChannel();selectionPort=channel.port1;selectionPort.onmessage=event=>{if(selectionMode&&event.data&&event.data.type==='selection')addReference(event.data.reference)};selectionPort.start();frame.contentWindow.postMessage({type:'design-system-review-connect'},'*',[channel.port2]);if(selectionMode)selectionPort.postMessage({type:'selection-mode',enabled:true})}
+frame.addEventListener('load',connectPreview);
+async function addReference(candidate){if(!selectionMode||!candidate)return;if(selectedReferences.length>=8){showNotice('Puedes adjuntar hasta 8 elementos por mensaje.');return}try{const response=await fetch('/api/reference',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reference:candidate})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'El elemento ya no est\xE1 disponible.');const reference=payload.reference,key=referenceKey(reference);if(selectedReferences.some(item=>referenceKey(item.reference)===key)){showNotice('Ese elemento ya est\xE1 adjunto.');return}selectedReferences.push({reference,stale:false});renderReferences()}catch(error){showNotice(error.message||'No se pudo a\xF1adir el elemento seleccionado.')}}
+selectModeButton.addEventListener('click',()=>{if(!selectionMode&&typeof MessageChannel==='undefined'){showNotice('Este navegador no admite la selecci\xF3n contextual.');return}setSelectionMode(!selectionMode)});
+form.addEventListener('submit',async event=>{event.preventDefault();const draft=promptInput.value,text=draft.trim();if(!text)return;sendButton.disabled=true;const submittedReferences=selectedReferences.map(item=>item.reference),submittedKeys=new Set(submittedReferences.map(referenceKey));try{const response=await fetch('/api/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,delivery:document.getElementById('delivery').value,references:submittedReferences})});const payload=await response.json();if(response.status===409){const staleKeys=new Set((payload.staleReferences||[]).map(referenceKey));for(const item of selectedReferences)if(staleKeys.has(referenceKey(item.reference)))item.stale=true;renderReferences()}if(!response.ok)throw new Error(payload.error||'No se pudo enviar el mensaje.');if(promptInput.value===draft)promptInput.value='';for(let index=selectedReferences.length-1;index>=0;index--)if(submittedKeys.has(referenceKey(selectedReferences[index].reference)))selectedReferences.splice(index,1);renderReferences();setStatus('working');await loadMessages();promptInput.focus()}catch(error){showNotice(error.message||'No se pudo enviar el mensaje.')}finally{sendButton.disabled=false}});
+promptInput.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();form.requestSubmit()}});document.getElementById('refresh-preview').addEventListener('click',async()=>{try{const response=await fetch('/api/preview',{method:'POST'});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'No se pudo regenerar la preview.');refreshPreview();showNotice('Preview regenerada.')}catch(error){showNotice(error.message||'No se pudo regenerar la preview.')}});
+function scheduleMessages(){clearTimeout(messageRefreshTimer);messageRefreshTimer=setTimeout(loadMessages,180)}refreshPreview();loadMessages();const events=new EventSource('/api/events');events.addEventListener('open',()=>{loadMessages();refreshPreview()});events.addEventListener('update',event=>{const update=JSON.parse(event.data);setStatus(update.status);scheduleMessages()});events.addEventListener('sync',event=>{const update=JSON.parse(event.data);setStatus(update.status);loadMessages();refreshPreview()});events.addEventListener('preview',()=>{refreshPreview();scheduleMessages()});events.addEventListener('review-error',event=>{const data=JSON.parse(event.data);showNotice(data.message||'Se produjo un error al actualizar la preview.')});events.onerror=()=>{stateLabel.textContent='Reconectando\u2026'};
+</script></body></html>`;
+  return { html, nonce };
+}
+
+// src/design-skills.ts
+import { readFile as readFile5 } from "fs/promises";
+import path5 from "path";
+var designSkillDefinitions = [
+  {
+    id: "opencode-design-visual-direction",
+    directory: "design-visual-direction",
+    name: "Design visual direction",
+    description: "Use when establishing or changing a product's visual direction, palette, typography, and distinctive design choices."
+  },
+  {
+    id: "opencode-design-interface-craft",
+    directory: "design-interface-craft",
+    name: "Product interface craft",
+    description: "Use when designing product screens, dashboards, components, patterns, hierarchy, density, and interface states."
+  },
+  {
+    id: "opencode-design-token-accessibility",
+    directory: "design-token-accessibility",
+    name: "Accessible design tokens",
+    description: "Use when selecting or changing design tokens, themes, component states, focus, motion, or screen accessibility guidance."
+  }
+];
+async function loadDesignSkills(pluginRoot, options) {
+  const enabled = enabledSkillIDs(options);
+  return Promise.all(designSkillDefinitions.filter((definition) => enabled.has(definition.id)).map(async (definition) => {
+    const skillPath = path5.join(pluginRoot, "skills", definition.directory, "SKILL.md");
+    const markdown = await readFile5(skillPath, "utf8");
+    return {
+      id: definition.id,
+      name: definition.name,
+      description: definition.description,
+      path: skillPath,
+      content: stripFrontmatter(markdown)
+    };
+  }));
+}
+function designSkillDirective(skills) {
+  if (skills.length === 0) {
+    return "The plugin's built-in design skills are disabled. Honor the user's direction and the project's existing Design System; use any relevant user-provided skills.";
+  }
+  const ids = skills.map((skill) => `\`${skill.id}\``).join(", ");
+  return `On Design System creation, update, preview, token, component, pattern, or screen-design tasks, load the relevant enabled plugin skills with the skill tool: ${ids}. Coordinate them rather than treating them as competing styles: establish a brief-specific visual direction first, translate it into product-interface hierarchy and reusable semantic tokens, then check the proposed token pairs, themes, states, and interactions for accessibility. The user's explicit direction and an existing project Design System remain authoritative; accessibility findings should prompt a clear explanation and a compliant alternative, not a silent visual redesign.`;
+}
+function enabledSkillIDs(options) {
+  const all = designSkillDefinitions.map((definition) => definition.id);
+  if (!options || typeof options !== "object") return new Set(all);
+  const setting = options.designSkills;
+  if (setting === false) return /* @__PURE__ */ new Set();
+  if (Array.isArray(setting)) return new Set(all.filter((id) => setting.includes(id)));
+  if (!setting || typeof setting !== "object") return new Set(all);
+  const configured = setting;
+  return new Set(all.filter((id) => configured[id] !== false));
+}
+function stripFrontmatter(markdown) {
+  return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "").trim();
+}
+
 // src/index.ts
 var commandPrompts = [
   {
     name: "design-system",
     description: "Create a Design System collaboratively, from scratch or from an existing UI",
-    instruction: `Act as a collaborative design-system designer. Gather only identity decisions that are genuinely unclear; honor explicit preferences. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with neutral tokens, foundations, explicit preferences, a few useful components and patterns, and source evidence. Keep status draft until reviewed. Do not modify application files.
+    useDesignSkills: true,
+    instruction: `Act as a collaborative design-system designer. Gather only identity decisions that are genuinely unclear; honor explicit preferences. If a Design System already exists, read it and offer an update/continue path rather than overwriting it. If the repository has UI and the user has not said whether to formalize that UI or start fresh, call the read-only analysis tool and ask which path they prefer; do not assume. Distinguish evidence from inference and ask about important inconsistencies before normalization. For a new system, confirm a concise visual direction before writing files; then call design_system_create with semantic tokens, foundations, explicit preferences, useful components and patterns, source evidence, and a bespoke previewSource. Design the preview yourself for this product: specific content, hierarchy, composition and working examples of its distinctive components, not a generic dashboard or renamed demo template. Use semantic --ds- token variables and the required theme marker. If you cannot supply previewSource at creation, immediately use design_system_preview with authored source before presenting the preview as finished. Keep status draft until reviewed. Do not modify application files.
 
 User request:`
   },
   {
     name: "design-system/update",
     description: "Make a coherent, versioned change to the existing Design System",
+    useDesignSkills: true,
     instruction: `Work collaboratively as a design-system architect. Read the Design System first using design_system_read. Interpret the request semantically, identify impacted token paths and dependent components/patterns, and honor recorded decisions. If the request conflicts with an explicit preference, ask before changing it. For a clear requested change, apply it with design_system_update, explain the dependency impact, provide revised full componentUpdates/patternUpdates where documented behavior or guidance needs a semantic change, add tokens only when existing semantic paths do not fit and then provide a value for every theme, add reusable components/patterns when composition is insufficient, update preferences/decisions/foundations where appropriate, choose patch/minor/major impact (expansion requires at least minor), and report unresolved references. Do not use blind text replacement and do not modify app UI code.
 
 User request:`
@@ -1311,7 +2013,8 @@ User request:`
   {
     name: "design-system/preview",
     description: "Generate or refresh the interactive Design System preview",
-    instruction: `Call design_system_preview to regenerate the interactive preview from the structured manifest, tokens, foundations, components, and patterns. Summarize the output file and whether light/dark themes and interactive examples are present. Do not treat the HTML as source of truth.
+    useDesignSkills: true,
+    instruction: `Read the Design System's manifest, preferences, decisions, foundations, tokens, and relevant component/pattern specifications first. Design a bespoke, self-contained interactive showcase for this product; you own its composition, hierarchy, writing and interaction. Do not reproduce the generic dashboard template. Show documented signature components in realistic contexts, not merely in a list. If design-system/preview/source.html exists, read it and edit that file deliberately using the normal file-edit tools; preserve intentional existing work. If it does not, inspect any existing customized preview for useful ideas before replacing generated output, then call design_system_preview with source containing a complete HTML document and <!-- opencode-design-system:theme-tokens --> inside <head>. Use var(--ds-color-accent) etc. for documented semantic tokens; theme CSS is injected from tokens.json and [data-theme] can be switched by your script. Add data-review-select="component" or "pattern", data-review-name, and data-review-file to the corresponding examples using exact manifest records, so review selection stays available without constraining layout. Keep the preview self-contained (no external assets/network); include responsive layout, working examples, keyboard/focus and reduced-motion behavior. Run design_system_preview without source after editing and inspect the output; if its mode is provisional, the task is NOT complete. Do not edit generated preview/index.html as source, alter application files, or silently change the approved identity. Report what was designed and what remains provisional.
 
 User request:`
   },
@@ -1325,6 +2028,7 @@ User request:`
   {
     name: "design-screen",
     description: "Design a screen specification using relevant Design System documentation",
+    useDesignSkills: true,
     instruction: `Act as a UI/UX screen designer. First call design_system_read with the user's task to load only the relevant tokens, components, patterns, preferences, and guidelines. Clarify the screen's purpose and key content when needed, then define hierarchy, layout, data, states, interactions, responsive behavior, and accessibility. Keep design separate from implementation. Call design_system_screen_spec to save an implementation-ready Markdown specification under design-system/screens/. Do not write UI code unless asked separately.
 
 User request:`
@@ -1333,9 +2037,31 @@ User request:`
 var index_default = Plugin.define({
   id: "opencode-design-system",
   async setup(ctx) {
-    const projectRoot = path5.resolve(ctx.location.project.canonical || ctx.location.directory);
-    const designSystemPath = path5.join(projectRoot, DESIGN_SYSTEM_DIR, "manifest.json");
+    const projectRoot = path6.resolve(ctx.location.project.canonical || ctx.location.directory);
+    const designSystemPath = path6.join(projectRoot, DESIGN_SYSTEM_DIR, "manifest.json");
+    const pluginRoot = path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), "..");
+    const designSkills = await loadDesignSkills(pluginRoot, ctx.options);
+    await ctx.skill.transform((editor) => {
+      for (const skill of designSkills) {
+        editor.add({
+          ...skill,
+          id: skill.id,
+          name: skill.name,
+          path: skill.path,
+          autoinvoke: true
+        });
+      }
+    });
+    const designSkillsGuidance = designSkillDirective(designSkills);
+    const review = createReviewService({
+      projectRoot,
+      context: ctx,
+      autoOpen: ctx.options.autoOpenReview === true
+    });
     await ctx.session.hook("context", (event) => {
+      if (designSkills.length > 0) {
+        event.system.push({ type: "text", text: designSkillsGuidance });
+      }
       if (!existsSync(designSystemPath)) return;
       event.system.push({
         type: "text",
@@ -1354,12 +2080,38 @@ ${prompt.text.trim()}` : "";
             await ctx.session.prompt({
               ...prompt,
               sessionID,
-              text: `${command.instruction}${suffix}`,
+              text: `${command.useDesignSkills ? `${designSkillsGuidance}
+
+` : ""}${command.instruction}${suffix}`,
               delivery
             });
           }
         });
       }
+      editor.add({
+        name: "design-system/review",
+        description: "Open a local Design System review with this session and contextual element selection",
+        execute: async ({ sessionID }) => {
+          try {
+            const result = await review.open(sessionID);
+            const opening = result.browserOpened ? "The review has been opened in the default browser." : result.browserError ? "The review could not be opened automatically in the default browser." : "Copy the link below and open it in a browser on this computer to start the review.";
+            await ctx.session.prompt({
+              sessionID,
+              delivery: "steer",
+              text: `The Design System review is ready and linked to this conversation. ${opening}
+
+Review URL: ${result.url}
+
+Present the exact URL above both as a clickable Markdown link and as a plain-text URL the user can copy. Do not open it with browser tools; the user is in the TUI and will open it in their regular browser. Explain that the review shares this session and that the link works only while OpenCode is running.`
+            });
+          } catch (error) {
+            await ctx.session.synthetic({
+              sessionID,
+              text: `Could not start the Design System review: ${error instanceof Error ? error.message : String(error)}. Check that the Design System exists and try again.`
+            });
+          }
+        }
+      });
     });
     await ctx.tool.transform((editor) => {
       editor.namespace({
@@ -1377,6 +2129,7 @@ ${prompt.text.trim()}` : "";
             description: { type: "string", description: "Product context and concise visual direction." },
             tokens: { type: "object", description: "Framework-neutral semantic tokens. Include schemaVersion and themes, with semantic groups such as color, typography, spacing, radius, elevation, motion, and breakpoints." },
             foundations: { type: "string", description: "Human-readable design philosophy and foundation rules in Markdown." },
+            previewSource: { type: "string", description: "Agent-designed complete self-contained HTML showcase, not a fixed template. Include <!-- opencode-design-system:theme-tokens --> inside <head>; use var(--ds-color-accent) and other semantic --ds- variables. Written to preview/source.html; preview/index.html is generated from it." },
             preferences: { type: "array", items: preferenceSchema },
             components: { type: "array", items: componentSchema },
             patterns: { type: "array", items: patternSchema },
@@ -1438,10 +2191,10 @@ ${prompt.text.trim()}` : "";
       });
       editor.add({
         name: "preview",
-        description: "Regenerate the self-contained interactive HTML preview from the current structured Design System files.",
+        description: "Publish an agent-authored project-specific HTML showcase or regenerate it from preview/source.html and the current tokens. Without authored source, returns a clearly provisional fallback.",
         options: { namespace: "design_system", codemode: true },
-        input: { type: "object", properties: {}, additionalProperties: false },
-        execute: async () => ({ content: JSON.stringify(await regeneratePreview(projectRoot), null, 2) })
+        input: { type: "object", properties: { source: { type: "string", description: "Complete bespoke HTML document with <!-- opencode-design-system:theme-tokens --> inside <head>; creates preview/source.html only if absent. Edit existing source with file tools, then call preview without source." } }, additionalProperties: false },
+        execute: async (raw) => ({ content: JSON.stringify(typeof raw.source === "string" ? await authorPreview(projectRoot, raw.source) : await regeneratePreview(projectRoot), null, 2) })
       });
       editor.add({
         name: "check",
@@ -1466,7 +2219,7 @@ ${prompt.text.trim()}` : "";
         execute: async (raw) => ({ content: JSON.stringify(await saveScreenSpec(projectRoot, String(raw.name), String(raw.specification)), null, 2) })
       });
     });
-    return () => void 0;
+    return () => review.close();
   }
 });
 var preferenceSchema = {
@@ -1599,7 +2352,7 @@ function selectTokens(document, task, preferredPaths, limit) {
     const theme = {};
     let remaining = limit;
     for (const group of Object.keys(value)) {
-      const flattened = flatten(value[group], group);
+      const flattened = flatten2(value[group], group);
       const candidates = flattened.filter(({ path: tokenPath }) => preferredPaths.has(tokenPath) || tokenPath.split(".").some((part) => part.length > 3 && taskTermsLower.includes(part.toLowerCase())));
       const baseline = flattened.filter(({ path: tokenPath }) => baselineTokenPath(tokenPath));
       const chosen = (candidates.length ? candidates : baseline).slice(0, remaining);
@@ -1618,9 +2371,9 @@ function selectTokens(document, task, preferredPaths, limit) {
 function baselineTokenPath(tokenPath) {
   return /^color\.(?:surface\.(?:base|raised)|text\.(?:primary|secondary)|accent\.primary|border\.subtle|focus\.ring)$/.test(tokenPath) || /^spacing\.(?:xs|sm|md|lg|control)$/.test(tokenPath) || /^radius\.(?:control|card|sm|md|lg)$/.test(tokenPath) || /^typography\.(?:fontFamily\.sans|fontSize\.(?:body|heading|title))$/.test(tokenPath) || /^breakpoints\.(?:compact|tablet|wide|desktop)$/.test(tokenPath) || /^(?:elevation|motion)\.(?:surface|dialog|popover|duration|easing)$/.test(tokenPath);
 }
-function flatten(value, prefix) {
+function flatten2(value, prefix) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [{ path: prefix, value }];
-  return Object.entries(value).flatMap(([key, item]) => flatten(item, `${prefix}.${key}`));
+  return Object.entries(value).flatMap(([key, item]) => flatten2(item, `${prefix}.${key}`));
 }
 function unflattenGroup(items) {
   const result = {};

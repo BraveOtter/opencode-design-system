@@ -31,6 +31,8 @@
   "files": [
     "dist",
     "templates",
+    "skills",
+    "THIRD-PARTY-NOTICES.md",
     "README.md",
     "README.es.md",
     "README.pt-BR.md",
